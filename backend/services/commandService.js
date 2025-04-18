@@ -94,6 +94,7 @@ async function generateCommand(task) {
 }
 
 // Function to handle YouTube-related commands
+// Function to handle YouTube-related commands
 async function openYouTubeVideo(query) {
   try {
     logger.info(`Searching YouTube for: ${query}`);
@@ -108,8 +109,9 @@ async function openYouTubeVideo(query) {
     const video = videos[0];
     const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
     
-    // Open the video in the default browser
-    const open = require('open');
+    // Open the video in the default browser using dynamic import
+    const openModule = await import('open');
+    const open = openModule.default;
     await open(videoUrl);
     
     // Take a screenshot after a delay to allow the browser to load
@@ -128,11 +130,36 @@ async function openYouTubeVideo(query) {
   }
 }
 
+
+
+
+
+
+
+
+// Function to generate, execute a command and take a screenshot
 // Function to generate, execute a command and take a screenshot
 async function processTextCommand(text) {
   try {
     logger.info(`Processing text as command: ${text}`);
     
+    // Check if this is a YouTube or video playback request
+    const isYouTubeRequest = /youtube|play|watch|video/i.test(text);
+    
+    if (isYouTubeRequest) {
+      logger.info(`Detected YouTube request: ${text}`);
+      // Extract the search query by removing YouTube-related keywords
+      const searchQuery = text
+        .replace(/(?:search|find|play|watch|on|youtube|video|for|me)/gi, '')
+        .trim();
+      
+      logger.info(`Extracted YouTube search query: "${searchQuery}"`);
+      
+      // Use the openYouTubeVideo function directly
+      return await openYouTubeVideo(searchQuery);
+    }
+    
+    // For non-YouTube requests, proceed with the original command generation flow
     // Generate command using AI
     const generatedResult = await generateCommand(text);
     const command = generatedResult.command;
@@ -156,6 +183,7 @@ async function processTextCommand(text) {
     throw new Error(`Command processing failed: ${error.message}`);
   }
 }
+
 
 module.exports = {
   executeCommand,
