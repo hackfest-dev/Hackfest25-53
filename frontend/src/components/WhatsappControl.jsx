@@ -16,10 +16,12 @@ function WhatsappControl({ socket }) {
     fetchStatus();
 
     socket.on('whatsapp-qr', (data) => {
+      console.log('Received QR code from socket:', !!data.qr);
       setQrCode(data.qr);
     });
 
     socket.on('whatsapp-status', (data) => {
+      console.log('Received status update:', data);
       setStatus({ connected: data.status === 'connected' });
       if (data.status === 'connected') {
         setQrCode(null);
@@ -39,10 +41,11 @@ function WhatsappControl({ socket }) {
 
     const intervalId = setInterval(() => {
       fetchStatus();
-      if (!status.connected) {
+      if (!status.connected && !qrCode) {
+        console.log('Polling for QR code...');
         fetchQrCode();
       }
-    }, 10000);
+    }, 5000);
 
     return () => {
       socket.off('whatsapp-qr');
@@ -60,7 +63,9 @@ function WhatsappControl({ socket }) {
 
   const fetchQrCode = async () => {
     try {
+      console.log('Fetching QR code from API...');
       const response = await api.get('/bot/qr');
+      console.log('QR code API response:', response.data);
       if (response.data.qrCode) {
         setQrCode(response.data.qrCode);
       }
@@ -122,14 +127,53 @@ function WhatsappControl({ socket }) {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      console.log('Logging out WhatsApp session...');
+      
+      // Try a direct fetch instead of axios
+      console.log('Trying direct fetch approach...');
+      const fetchResponse = await fetch(`${api.defaults.baseURL}/bot/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const responseData = await fetchResponse.json();
+      console.log('Fetch response:', responseData);
+      
+      // Clear QR code and status
+      setQrCode(null);
+      setStatus({ connected: false });
+      
+      // Start polling for new QR code
+      setTimeout(fetchQrCode, 3000);
+    } catch (error) {
+      console.error('Error logging out:', error);
+      setError('Failed to logout: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-gray-900 text-gray-100 min-h-screen p-6">
       <h1 className="text-3xl font-bold text-indigo-400 mb-6">WhatsApp Bot Control</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-          <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+          <div className="bg-gray-700 px-6 py-4 border-b border-gray-600 flex justify-between items-center">
             <h2 className="text-xl font-semibold text-indigo-300">Connection Status</h2>
+            <button 
+              onClick={handleLogout}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded"
+            >
+              {loading ? 'Loading...' : 'Force Logout'}
+            </button>
           </div>
           <div className="p-6">
             <div className="flex items-center mb-6">
@@ -141,14 +185,28 @@ function WhatsappControl({ socket }) {
               <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg">
                 <p className="text-gray-900 mb-4">Scan this QR code with WhatsApp to log in:</p>
                 <QRCodeSVG value={qrCode} size={250} />
+                <button 
+                  onClick={fetchQrCode} 
+                  className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded"
+                >
+                  Refresh QR Code
+                </button>
               </div>
             )}
             
             {!status.connected && !qrCode && (
-              <div className="flex items-center justify-center h-40 bg-gray-700/30 rounded-lg">
+              <div className="flex flex-col items-center justify-center h-40 bg-gray-700/30 rounded-lg">
                 <p className="text-gray-400">Waiting for QR code...</p>
+                <button 
+                  onClick={fetchQrCode} 
+                  className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded"
+                >
+                  Try Again
+                </button>
               </div>
             )}
+            
+            {error && <div className="mt-4 text-red-400 bg-red-900/30 p-3 rounded-md">{error}</div>}
           </div>
         </div>
         
