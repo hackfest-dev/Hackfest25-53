@@ -1,0 +1,10 @@
+# Local logs
+logs/
+/logs/
+*.log
+
+# Command logs
+commandLog.json
+
+# Temporary files
+/tmp/

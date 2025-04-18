@@ -26,6 +26,8 @@ backend/.env
 backend/config/config.local.js
 backend/config/config.prod.js
 backend/logs/
+backend/logs/**/*
+**/commandLog.json
 backend/tmp/
 backend/screenshots/
 backend/auth_info_baileys/
@@ -50,6 +52,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 logs
+logs/
 *.log
 
 # IDE - VSCode

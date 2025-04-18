@@ -6,6 +6,52 @@ const aiService = require('./aiService');
 
 const logger = createLogger('command-service');
 
+// New function to log commands to JSON file
+function logCommandToFile(commandData) {
+  try {
+    const logFilePath = path.join(__dirname, '..', 'logs', 'commandLog.json');
+    const logDir = path.dirname(logFilePath);
+    
+    // Create logs directory if it doesn't exist
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+      logger.info(`Created logs directory: ${logDir}`);
+    }
+    
+    // Read existing log file or create empty array
+    let logEntries = [];
+    if (fs.existsSync(logFilePath)) {
+      try {
+        const fileContent = fs.readFileSync(logFilePath, 'utf8');
+        logEntries = JSON.parse(fileContent);
+      } catch (err) {
+        logger.error(`Error parsing log file: ${err.message}`);
+      }
+    }
+    
+    // Add timestamp to command data
+    const commandEntry = {
+      ...commandData,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Add new entry to beginning of array
+    logEntries.unshift(commandEntry);
+    
+    // Keep only latest 1000 entries
+    if (logEntries.length > 1000) {
+      logEntries = logEntries.slice(0, 1000);
+    }
+    
+    // Write back to file
+    fs.writeFileSync(logFilePath, JSON.stringify(logEntries, null, 2), 'utf8');
+    logger.info(`Command logged to ${logFilePath}`);
+  } catch (error) {
+    logger.error(`Failed to log command to file: ${error.message}`);
+    // Don't throw - this is a non-critical operation
+  }
+}
+
 // Get NirCmd path from config or use fallback paths
 let nircmdPath = null;
 try {
@@ -56,12 +102,28 @@ async function executeCommand(command) {
     logger.info(`Executing command: ${command}`);
     const output = execSync(command, { encoding: 'utf8', shell: true });
     
+    // Log the executed command
+    logCommandToFile({
+      type: 'execute',
+      command,
+      output: output.substring(0, 1000), // Limit output size
+      success: true
+    });
+    
     return {
       success: true,
       command,
       output
     };
   } catch (error) {
+    // Log failed command
+    logCommandToFile({
+      type: 'execute',
+      command,
+      error: error.message,
+      success: false
+    });
+    
     logger.error(`Command execution failed: ${error.message}`);
     throw new Error(`Command execution failed: ${error.message}`);
   }
@@ -82,18 +144,33 @@ async function generateCommand(task) {
     // Clean up the response to extract just the command
     const cleanCommand = command.trim().replace(/```[\s\S]*?```/g, '').trim();
     
+    // Log the generated command
+    logCommandToFile({
+      type: 'generate',
+      task,
+      command: cleanCommand,
+      success: true
+    });
+    
     return {
       success: true,
       task,
       command: cleanCommand
     };
   } catch (error) {
+    // Log failed generation
+    logCommandToFile({
+      type: 'generate',
+      task,
+      error: error.message,
+      success: false
+    });
+    
     logger.error(`Command generation failed: ${error.message}`);
     throw new Error(`Command generation failed: ${error.message}`);
   }
 }
 
-// Function to handle YouTube-related commands
 // Function to handle YouTube-related commands
 async function openYouTubeVideo(query) {
   try {
@@ -118,6 +195,15 @@ async function openYouTubeVideo(query) {
     await new Promise(resolve => setTimeout(resolve, 3000));
     const screenshot = require('./screenshotService').takeScreenshot();
     
+    // Log the YouTube video request
+    logCommandToFile({
+      type: 'youtube',
+      query,
+      videoInfo: video,
+      videoUrl: videoUrl,
+      success: true
+    });
+    
     return {
       success: true,
       videoInfo: video,
@@ -125,19 +211,19 @@ async function openYouTubeVideo(query) {
       screenshot: screenshot.buffer
     };
   } catch (error) {
+    // Log failed YouTube request
+    logCommandToFile({
+      type: 'youtube',
+      query,
+      error: error.message,
+      success: false
+    });
+    
     logger.error(`Error opening YouTube video: ${error.message}`);
     throw error;
   }
 }
 
-
-
-
-
-
-
-
-// Function to generate, execute a command and take a screenshot
 // Function to generate, execute a command and take a screenshot
 async function processTextCommand(text) {
   try {
@@ -156,7 +242,18 @@ async function processTextCommand(text) {
       logger.info(`Extracted YouTube search query: "${searchQuery}"`);
       
       // Use the openYouTubeVideo function directly
-      return await openYouTubeVideo(searchQuery);
+      const result = await openYouTubeVideo(searchQuery);
+      
+      // After successful processing, log the complete operation
+      logCommandToFile({
+        type: 'youtube-text',
+        text,
+        command: `YouTube search: ${searchQuery}`,
+        output: 'Video played',
+        success: true
+      });
+      
+      return result;
     }
     
     // For non-YouTube requests, proceed with the original command generation flow
@@ -171,6 +268,15 @@ async function processTextCommand(text) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     const screenshot = require('./screenshotService').takeScreenshot();
     
+    // After successful processing, log the complete operation
+    logCommandToFile({
+      type: 'process-text',
+      text,
+      command,
+      output: executionResult.output.substring(0, 1000),
+      success: true
+    });
+    
     return {
       success: true,
       text,
@@ -179,11 +285,18 @@ async function processTextCommand(text) {
       screenshot: screenshot.buffer
     };
   } catch (error) {
+    // Log failed processing
+    logCommandToFile({
+      type: 'process-text',
+      text,
+      error: error.message,
+      success: false
+    });
+    
     logger.error(`Command processing failed: ${error.message}`);
     throw new Error(`Command processing failed: ${error.message}`);
   }
 }
-
 
 module.exports = {
   executeCommand,
