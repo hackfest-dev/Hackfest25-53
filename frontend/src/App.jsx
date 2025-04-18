@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Route, Routes, Navigate, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './services/firebase';
+import { auth, logOut } from './services/firebase';
 import Dashboard from './components/Dashboard';
 import WhatsappControl from './components/WhatsappControl';
 import CommandPanel from './components/CommandPanel';
@@ -120,6 +120,16 @@ function App() {
     }, 5000);
   };
 
+  const handleLogout = async () => {
+    try {
+      await logOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      addNotification(`Logout failed: ${error.message}`, 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -148,6 +158,12 @@ function App() {
                 />
                 <span className="text-sm text-gray-300">{user.displayName || user.email}</span>
               </div>
+              <button
+                onClick={handleLogout}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded transition-colors duration-200"
+              >
+                Logout
+              </button>
             </div>
           </div>
         </header>

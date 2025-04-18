@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, signInWithGoogle } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    // Check if user was redirected here after logout
+    if (location.state?.from === 'logout') {
+      setMessage('You have been successfully logged out.');
+    }
+    
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         // User is already signed in, redirect to dashboard
@@ -17,7 +24,7 @@ function LoginPage() {
     });
 
     return () => unsubscribe();
-  }, [navigate]);
+  }, [navigate, location]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -63,6 +70,12 @@ function LoginPage() {
             Sign in to access your bot control panel
           </p>
         </div>
+        
+        {message && (
+          <div className="p-4 mb-4 text-sm text-green-400 bg-green-900/30 rounded-lg">
+            {message}
+          </div>
+        )}
         
         {error && (
           <div className="p-4 mb-4 text-sm text-red-400 bg-red-900/30 rounded-lg">
