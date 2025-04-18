@@ -21,6 +21,14 @@ frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
 
+# Log and data files to ignore (anywhere in the project)
+**/api_log.txt
+**/categorized_log.json
+**/usage_log.json
+frontend/public/api_log.txt
+frontend/public/categorized_log.json
+frontend/public/usage_log.json
+
 # Backend specific
 backend/.env
 backend/config/config.local.js

@@ -1,82 +1,111 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/api';
+/**
+ * API service for interacting with the backend
+ */
+
+const API_BASE_URL = 'http://localhost:3000/api';
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? '/api' 
+  : 'http://localhost:5000/api';
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   },
-  timeout: 10000 // 10 second timeout
 });
 
-// Add auth token to requests
 let authToken = null;
 
-// Method to set auth token
-api.setAuthToken = (token) => {
-  authToken = token;
-};
-
-// Add request interceptor for logging and auth
+// Add a request interceptor to attach the auth token to every request
 api.interceptors.request.use(
   (config) => {
-    console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
-    
-    // Add auth token to headers if available
     if (authToken) {
-      config.headers.Authorization = `Bearer ${authToken}`;
+      config.headers['Authorization'] = `Bearer ${authToken}`;
     }
-    
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
 
-// Add response interceptor for logging
+// Add a response interceptor to handle auth errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`API Response: ${response.status} from ${response.config.url}`);
     return response;
   },
   (error) => {
-    if (error.code === 'ECONNABORTED') {
-      console.error('API request timed out');
-    } else if (!error.response) {
-      console.error('Network Error: Cannot connect to the backend server');
-    } else if (error.response.status === 401) {
+    if (error.response && error.response.status === 401) {
       console.error('Authentication error: User not authorized');
-      
-      // Redirect to login if authentication fails
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    } else {
-      console.error(`API Error ${error.response?.status}: ${error.response?.data?.message || error.message}`);
+      // Optionally trigger logout or redirect to login page
     }
     return Promise.reject(error);
   }
 );
 
-// Add a health check function
-api.healthCheck = async () => {
+const setAuthToken = (token) => {
+  authToken = token;
+};
+
+const clearAuthToken = () => {
+  authToken = null;
+};
+
+/**
+ * Toggle the tracking service on or off
+ * @param {boolean} enable - Whether to enable or disable tracking
+ * @returns {Promise<Object>} Response object
+ */
+const toggleTracking = async (enable) => {
   try {
-    const response = await api.get('/test');
-    return {
-      isAlive: true,
-      message: response.data.message
-    };
+    const action = enable ? 'start' : 'stop';
+    const response = await fetch(`${API_URL}/tracking/${action}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+    
+    return await response.json();
   } catch (error) {
-    return {
-      isAlive: false,
-      message: error.code === 'ECONNABORTED' 
-        ? 'Connection timeout' 
-        : error.message
-    };
+    console.error('API error toggling tracking:', error);
+    throw error;
   }
 };
 
-export default api;
+/**
+ * Get current tracking status
+ * @returns {Promise<Object>} Response with tracking status
+ */
+const getTrackingStatus = async () => {
+  try {
+    const response = await fetch(`${API_URL}/tracking/status`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('API error getting tracking status:', error);
+    throw error;
+  }
+};
+
+export default {
+  get: (url, config = {}) => api.get(url, config),
+  post: (url, data, config = {}) => api.post(url, data, config),
+  put: (url, data, config = {}) => api.put(url, data, config),
+  delete: (url, config = {}) => api.delete(url, config),
+  patch: (url, data, config = {}) => api.patch(url, data, config),
+  setAuthToken,
+  clearAuthToken,
+  toggleTracking,
+  getTrackingStatus,
+};

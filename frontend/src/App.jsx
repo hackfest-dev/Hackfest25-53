@@ -9,6 +9,7 @@ import CommandPanel from './components/CommandPanel';
 import ScreenshotPanel from './components/ScreenshotPanel';
 import Navbar from './components/Navbar';
 import LoginPage from './components/LoginPage';
+import MainDashboard from './pages/dashboard/MainDashboard';
 import api from './services/api';
 
 // Initialize socket connection
@@ -61,7 +62,12 @@ function App() {
         currentUser.getIdToken().then(token => {
           // Set the token in API service
           api.setAuthToken(token);
+          
+          // Only check backend status after token is set
+          checkStatus(token);
         });
+      } else {
+        setIsConnected(false);
       }
     });
 
@@ -88,17 +94,16 @@ function App() {
       addNotification(`Error: ${data.message}`, 'error');
     });
 
-    // Check backend status
-    const checkStatus = async () => {
+    // Check backend status - now this will be called only after token is set
+    const checkStatus = async (token) => {
       try {
-        await api.get('/bot/status');
+        const response = await api.get('/bot/status');
+        setIsConnected(true);
       } catch (error) {
         console.error('Backend connection error:', error);
         setIsConnected(false);
       }
     };
-    
-    checkStatus();
 
     return () => {
       unsubscribe();
@@ -141,8 +146,8 @@ function App() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-900 text-gray-100">
       {user && (
-        <header className="bg-gray-800 border-b border-gray-700 shadow-md py-4 px-6">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <header className="bg-gray-800 border-b border-gray-700 shadow-md px-6">
+          {/* <div className="max-w-7xl mx-auto flex justify-between items-center">
             <h1 className="text-2xl font-bold text-indigo-400">WhatsApp Bot Platform</h1>
             <div className="flex items-center space-x-4">
               <div className="connection-status">
@@ -165,11 +170,11 @@ function App() {
                 Logout
               </button>
             </div>
-          </div>
+          </div> */}
         </header>
       )}
 
-      {user && <Navbar user={user} />}
+      {/* {user && <Navbar user={user} />} */}
 
       <main className="flex-grow">
         <Routes>
@@ -177,6 +182,11 @@ function App() {
           <Route path="/" element={
             <ProtectedRoute>
               <Dashboard socket={socket} user={user} />
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <MainDashboard user={user} />
             </ProtectedRoute>
           } />
           <Route path="/whatsapp" element={

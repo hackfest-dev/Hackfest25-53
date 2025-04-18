@@ -104,7 +104,7 @@ io.on('connection', async (socket) => {
   }
 
   socket.on('disconnect', () => {
-    logger.info(`Client disconnected: ${socket.id}`);
+    // logger.info(`Client disconnected: ${socket.id}`);
   });
 
   socket.on('send-message', async ({ number, message }) => {
