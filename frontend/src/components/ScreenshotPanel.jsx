@@ -34,10 +34,10 @@ function ScreenshotPanel() {
     setError(null);
     
     try {
-      const response = await api.get('/api/screenshot');
+      const response = await api.get('/screenshot');
       
       // Create full URL to access the screenshot
-      const screenshotUrl = `http://localhost:3000/api/screenshot/${response.data.filename}`;
+      const screenshotUrl = `${api.defaults.baseURL}/screenshot/${response.data.filename}`;
       
       // Update state with new screenshot data
       setScreenshotData({
@@ -87,8 +87,16 @@ function ScreenshotPanel() {
     setError(null);
     
     try {
-      // Use html2canvas or a similar approach to capture the screen
-      const html2canvas = (await import('html2canvas')).default;
+      // Import html2canvas more reliably
+      let html2canvas;
+      try {
+        html2canvas = (await import('html2canvas')).default;
+      } catch (importError) {
+        console.error('Error importing html2canvas:', importError);
+        setError('Required screenshot library not found. Please run "npm install html2canvas" in the frontend directory.');
+        setLoading(false);
+        return;
+      }
       
       // Wait to ensure the import is complete
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -101,11 +109,11 @@ function ScreenshotPanel() {
       // Convert canvas to data URL
       const imageData = canvas.toDataURL('image/png');
       
-      // Send to server
-      const response = await api.post('/api/browser-screenshot', { imageData });
+      // Send to server - FIXED PATH
+      const response = await api.post('/screenshot/browser-screenshot', { imageData });
       
-      // Create full URL to access the screenshot
-      const screenshotUrl = `http://localhost:3000/api/screenshot/${response.data.filename}`;
+      // Create full URL to access the screenshot - FIXED URL CONSTRUCTION
+      const screenshotUrl = `${api.defaults.baseURL}/screenshot/${response.data.filename}`;
       
       // Update state with new screenshot data
       setScreenshotData({
