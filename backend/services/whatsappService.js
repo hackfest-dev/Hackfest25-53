@@ -317,7 +317,7 @@ async function handleAIChatMode(text, sender, sock, mediaData) {
   await new Promise(resolve => setTimeout(resolve, thinkingTime));
   
   // Get AI response
-  const aiResponse = await aiService.queryGeminiAI(text, context);
+  const aiResponse = await aiService.queryGroqAI(text, context);
   
   // Add AI response to conversation history
   conversationHistory[sender].push({ role: "assistant", content: aiResponse });
@@ -359,7 +359,7 @@ async function handleVoiceMessage(msg, sock) {
     logger.info('Transcription:', transcription);
 
     // Process with AI
-    const aiResponse = await aiService.queryGeminiAI(transcription);
+    const aiResponse = await aiService.queryGroqAI(transcription);
     const responseAudio = await aiService.textToSpeech(aiResponse);
 
     // Send voice response

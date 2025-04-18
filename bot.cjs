@@ -43,7 +43,7 @@ async function handleVoiceMessage(msg, sock) {
     console.log('🎤 Transcription:', transcription);
 
     // Process with AI
-    const aiResponse = await queryGeminiAI(transcription);
+    const aiResponse = await queryGroqAI(transcription);
     const responseAudio = await textToSpeech(aiResponse);
 
     // Send voice response
@@ -171,7 +171,7 @@ async function openAndScreenshot(query) {
       4. Always quote special characters
       Only return the command.`;
 
-    const openCommand = await queryGeminiAI(prompt, {
+    const openCommand = await queryGroqAI(prompt, {
       currentDirectory: "/Users",
       terminalContext: "File Navigation"
     });
@@ -320,7 +320,7 @@ async function takeScreenshot() {
 
 
 // Function to query Gemini AI
-async function queryGeminiAI(prompt, context = {}) {
+async function queryGroqAI(prompt, context = {}) {
   try {
     // Gemini API endpoint
     const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${API_KEY}`;
@@ -404,7 +404,7 @@ async function generateBashCommand(task) {
       const prompt = `Generate a bash command for macOS M2 to: ${task}. Only return the command itself without any explanation or markdown.`;
       
       // Use the existing Gemini AI function
-      const command = await queryGeminiAI(prompt, {
+      const command = await queryGroqAI(prompt, {
         currentDirectory: "/whatsapp/commands",
         terminalContext: "Command Generation",
         recentCommands: "Generate bash command"
@@ -705,7 +705,7 @@ sock.ev.on("messages.upsert", async ({ messages, type }) => {
                 await new Promise(resolve => setTimeout(resolve, thinkingTime));
                 
                 // Get AI response
-                const aiResponse = await queryGeminiAI(text, context);
+                const aiResponse = await queryGroqAI(text, context);
                 
                 // Add AI response to conversation history
                 conversationHistory[sender].push({ role: "assistant", content: aiResponse });

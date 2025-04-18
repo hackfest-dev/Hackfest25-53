@@ -1,15 +1,18 @@
 const axios = require('axios');
 const { createLogger } = require('../utils/logger');
 const config = require('../config/config');
+const { Groq } = require('groq-sdk');
 
 const logger = createLogger('ai-service');
 
-// Function to query Gemini AI
-async function queryGeminiAI(prompt, context = {}) {
+// Initialize Groq client
+const groq = new Groq({
+  apiKey: config.apiKeys.groq
+});
+
+// Function to query Groq (replacing Gemini)
+async function queryGroqAI(prompt, context = {}) {
   try {
-    // Gemini API endpoint
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${config.apiKeys.google}`;
-    
     // Format the context as a string
     const contextStr = `
     Current Directory: ${context.currentDirectory || 'Unknown'}
@@ -18,68 +21,53 @@ async function queryGeminiAI(prompt, context = {}) {
     Recent Commands: ${context.recentCommands || 'None'}
     `;
     
-    logger.info("Calling Gemini API with context");
+    logger.info("Calling Groq API with context");
     
-    // Prepare request body based on whether screenshot is included
-    const requestBody = {
-      contents: [{
+    let messages = [
+      {
+        role: "system",
+        content: "You are a helpful assistant that provides accurate and concise information about technical questions."
+      },
+      {
         role: "user",
-        parts: []
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 1024,
+        content: `${contextStr}\n\nUser Question: ${prompt}`
       }
-    };
+    ];
     
-    // Add text context
-    requestBody.contents[0].parts.push({
-      text: `${contextStr}\n\nUser Question: ${prompt}`
-    });
-    
-    // If screenshot is available, add as image part
+    // Note: Groq doesn't support image input directly like Gemini or OpenAI
+    // If screenshot is available, we'll need to handle it differently or use a different service
     if (context.screenshot) {
-      // Remove the data:image/png;base64, prefix if present
-      const base64Image = context.screenshot.includes(',') 
-        ? context.screenshot.split(',')[1] 
-        : context.screenshot;
-        
-      requestBody.contents[0].parts.push({
-        inline_data: {
-          mime_type: "image/png",
-          data: base64Image
-        }
+      logger.info("Screenshot provided but Groq doesn't support image input directly. Processing text only.");
+      messages.push({
+        role: "user",
+        content: "Note: I also shared a screenshot with you, but I understand you can't view it. Please help based on the text information provided."
       });
     }
     
-    const response = await axios.post(url, requestBody, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
+    // Call Groq API
+    const response = await groq.chat.completions.create({
+      model: "llama3-70b-8192", // Groq supports various models including Llama 3, Mixtral, etc.
+      messages: messages,
+      max_tokens: 1024,
+      temperature: 0.7,
+      top_p: 0.95
     });
     
     logger.info("API response received successfully");
     
-    // Handle the response structure
-    if (response.data.candidates && 
-        response.data.candidates.length > 0 && 
-        response.data.candidates[0].content && 
-        response.data.candidates[0].content.parts && 
-        response.data.candidates[0].content.parts.length > 0) {
-      return response.data.candidates[0].content.parts[0].text;
+    if (response.choices && response.choices.length > 0) {
+      return response.choices[0].message.content;
     }
     
     // Fallback message
     return "Sorry, I couldn't generate a response. Please try again.";
   } catch (error) {
-    logger.error("Gemini API Error:", error.response?.data || error.message);
+    logger.error("Groq API Error:", error.response?.data || error.message);
     throw new Error(error.response?.data?.error?.message || error.message);
   }
 }
 
-// Function to search YouTube
+// Function to search YouTube (unchanged)
 async function searchYouTube(query, maxResults = 5) {
   try {
     const { google } = require('googleapis');
@@ -110,7 +98,7 @@ async function searchYouTube(query, maxResults = 5) {
   }
 }
 
-// Text-to-Speech with ElevenLabs
+// Text-to-Speech with ElevenLabs (unchanged)
 async function textToSpeech(text) {
   try {
     const response = await axios.post(
@@ -141,7 +129,7 @@ async function textToSpeech(text) {
   }
 }
 
-// Speech-to-Text with Whisper
+// Speech-to-Text with Whisper (unchanged)
 async function transcribeAudio(buffer) {
   const fs = require('fs').promises;
   const path = require('path');
@@ -187,9 +175,53 @@ async function transcribeAudio(buffer) {
   }
 }
 
+// Alternative implementation for image handling with OpenAI
+async function handleImageWithOpenAI(prompt, imageBase64) {
+  try {
+    const { OpenAI } = require('openai');
+    const openai = new OpenAI({
+      apiKey: config.apiKeys.openai
+    });
+    
+    // Remove the data:image/png;base64, prefix if present
+    const base64Image = imageBase64.includes(',') 
+      ? imageBase64.split(',')[1] 
+      : imageBase64;
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1024
+    });
+    
+    if (response.choices && response.choices.length > 0) {
+      return response.choices[0].message.content;
+    }
+    
+    return "Sorry, I couldn't analyze the image. Please try again.";
+  } catch (error) {
+    logger.error("OpenAI Vision API Error:", error);
+    throw new Error("Image analysis failed: " + error.message);
+  }
+}
+
 module.exports = {
-  queryGeminiAI,
+  queryGroqAI, // Renamed from queryGeminiAI
   searchYouTube,
   textToSpeech,
-  transcribeAudio
+  transcribeAudio,
+  handleImageWithOpenAI // Added for image handling
 };
