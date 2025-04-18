@@ -10,7 +10,11 @@ const { createLogger } = require('./utils/logger');
 const botRoutes = require('./routes/botRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
 const commandRoutes = require('./routes/commandRoutes');
-const calendarRoutes = require('./routes/calendarRoutes'); // ✅ FIXED typo from calenderRoutes
+const calendarRoutes = require('./routes/calendarRoutes');
+const authRoutes = require('./routes/authRoutes'); // New auth routes
+
+// Authentication middleware
+const authController = require('./controllers/authController');
 
 // Initialize logger
 const logger = createLogger('server');
@@ -55,10 +59,11 @@ botService.initializeSocketIO(io);
 
 // Register API routes
 logger.info('Registering API routes...');
-app.use('/api/bot', botRoutes);
-app.use('/api/screenshot', screenshotRoutes);
-app.use('/api/command', commandRoutes);
-app.use('/api/calendar', calendarRoutes); // ✅ FIXED typo
+app.use('/api/auth', authRoutes); // Add auth routes
+app.use('/api/bot', authController.verifyToken, botRoutes); // Protected by auth
+app.use('/api/screenshot', authController.verifyToken, screenshotRoutes); // Protected by auth
+app.use('/api/command', authController.verifyToken, commandRoutes); // Protected by auth
+app.use('/api/calendar', calendarRoutes); // Calendar has its own auth handling
 
 // Debug: Log registered routes
 app._router.stack.forEach((middleware) => {

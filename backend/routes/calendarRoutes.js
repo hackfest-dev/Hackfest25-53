@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const calendarManager = require('../services/calendarManager');
+const authController = require('../controllers/authController');
 
 // Get auth URL - now properly returns the URL
 router.get('/auth/url', async (req, res) => {
   try {
-    const authUrl = await calendarManager.authorize();
+    const userId = req.user?.uid || null;
+    const authUrl = await calendarManager.authorize(userId);
     res.json({ success: true, authUrl });
   } catch (error) {
     res.status(500).json({ 
@@ -58,10 +60,11 @@ router.post('/oauth2callback', async (req, res) => {
   }
 });
 
-// Get upcoming events with better error handling
-router.get('/events', async (req, res) => {
+// Get upcoming events with better error handling (protected by auth)
+router.get('/events', authController.verifyToken, async (req, res) => {
   try {
-    const events = await calendarManager.getUpcomingEvents();
+    const userId = req.user.uid;
+    const events = await calendarManager.getUpcomingEvents(userId);
     if (!events || events.length === 0) {
       return res.json({ 
         success: true, 
@@ -73,7 +76,7 @@ router.get('/events', async (req, res) => {
   } catch (error) {
     if (error.message.includes('Not authorized')) {
       // Provide auth URL when not authorized
-      const authUrl = await calendarManager.authorize();
+      const authUrl = await calendarManager.authorize(req.user.uid);
       return res.status(401).json({ 
         success: false, 
         error: 'Not authorized', 
@@ -87,10 +90,12 @@ router.get('/events', async (req, res) => {
   }
 });
 
-// Add event via natural language with improved authorization handling
-router.post('/events/natural', async (req, res) => {
+// Add event via natural language with improved authorization handling (protected by auth)
+router.post('/events/natural', authController.verifyToken, async (req, res) => {
   try {
     const { text } = req.body;
+    const userId = req.user.uid;
+    
     if (!text) {
       return res.status(400).json({ 
         success: false, 
@@ -99,7 +104,7 @@ router.post('/events/natural', async (req, res) => {
     }
     
     try {
-      const event = await calendarManager.handleNaturalLanguageInput(text);
+      const event = await calendarManager.handleNaturalLanguageInput(text, userId);
       res.json({ 
         success: true, 
         event,
@@ -109,7 +114,7 @@ router.post('/events/natural', async (req, res) => {
       // Special handling for authorization errors
       if (error.message.includes('Not authorized')) {
         console.log('Authorization required, generating auth URL');
-        const authUrl = await calendarManager.authorize();
+        const authUrl = await calendarManager.authorize(userId);
         
         // Return 401 with auth URL for auto-opening in browser
         return res.status(401).json({ 

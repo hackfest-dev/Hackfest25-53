@@ -10,10 +10,24 @@ const api = axios.create({
   timeout: 10000 // 10 second timeout
 });
 
-// Add request interceptor for logging
+// Add auth token to requests
+let authToken = null;
+
+// Method to set auth token
+api.setAuthToken = (token) => {
+  authToken = token;
+};
+
+// Add request interceptor for logging and auth
 api.interceptors.request.use(
   (config) => {
     console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
+    
+    // Add auth token to headers if available
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`;
+    }
+    
     return config;
   },
   (error) => {
@@ -33,6 +47,13 @@ api.interceptors.response.use(
       console.error('API request timed out');
     } else if (!error.response) {
       console.error('Network Error: Cannot connect to the backend server');
+    } else if (error.response.status === 401) {
+      console.error('Authentication error: User not authorized');
+      
+      // Redirect to login if authentication fails
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     } else {
       console.error(`API Error ${error.response?.status}: ${error.response?.data?.message || error.message}`);
     }

@@ -26,15 +26,47 @@ const oauth2Client = new OAuth2Client(
   GOOGLE_REDIRECT_URI
 );
 
-// Global variable to store tokens
-let tokens = null;
+// Map to store user tokens by user ID
+const userTokensMap = new Map();
+
+// New method to set tokens directly from Firebase authentication
+async function setGoogleTokens(googleToken, userInfo) {
+  try {
+    console.log('Setting Google tokens for user:', userInfo.email);
+    
+    // Create a token object in the format OAuth2Client expects
+    const tokens = {
+      access_token: googleToken.access_token,
+      id_token: googleToken.id_token,
+      scope: SCOPES.join(' '),
+      token_type: 'Bearer'
+    };
+    
+    // Store tokens in the map using user ID as key
+    userTokensMap.set(userInfo.sub, tokens);
+    
+    // Configure the OAuth client with the tokens
+    oauth2Client.setCredentials(tokens);
+    
+    // Verify access to calendar by making a simple API call
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    await calendar.calendarList.list({ maxResults: 1 });
+    
+    console.log('Calendar access verified successfully for user:', userInfo.email);
+    return true;
+  } catch (error) {
+    console.error('Error setting Google tokens:', error);
+    throw new Error(`Failed to set Google tokens: ${error.message}`);
+  }
+}
 
 // Updated authorize function to better handle token state
-async function authorize() {
-  // Check for valid tokens first
-  if (tokens && tokens.access_token) {
+async function authorize(userId) {
+  // Check if we have tokens for this user
+  if (userId && userTokensMap.has(userId)) {
     try {
       // Set the credentials
+      const tokens = userTokensMap.get(userId);
       oauth2Client.setCredentials(tokens);
       
       // Verify the token is still valid (by making a simple API call)
@@ -42,12 +74,12 @@ async function authorize() {
       await calendar.calendarList.get({ calendarId: 'primary' });
       
       // If we got here, the token is valid
-      console.log('Using existing valid tokens');
+      console.log('Using existing valid tokens for user:', userId);
       return oauth2Client;
     } catch (error) {
-      console.log('Token validation failed, will request new authorization', error.message);
+      console.log('Token validation failed for user:', userId, error.message);
       // Token is invalid, continue to generate new auth URL
-      tokens = null;
+      userTokensMap.delete(userId);
     }
   }
 
@@ -58,7 +90,7 @@ async function authorize() {
     prompt: 'consent' // Force consent screen to ensure we get refresh token
   });
   
-  console.log('Generated new auth URL:', authUrl);
+  console.log('Generated new auth URL');
   return authUrl; // Return the URL for the frontend to use
 }
 
@@ -74,11 +106,24 @@ async function setTokens(code) {
     }
     
     console.log('Received valid tokens');
-    tokens = newTokens;
-    oauth2Client.setCredentials(tokens);
+    
+    // Decode the ID token to get the user ID
+    const ticket = await oauth2Client.verifyIdToken({
+      idToken: newTokens.id_token,
+      audience: GOOGLE_CLIENT_ID
+    });
+    
+    const payload = ticket.getPayload();
+    const userId = payload.sub;
+    
+    // Store tokens in the map
+    userTokensMap.set(userId, newTokens);
+    
+    // Set the credentials for this request
+    oauth2Client.setCredentials(newTokens);
     
     // Return the configured client
-    return oauth2Client;
+    return { oauth2Client, userId };
   } catch (error) {
     console.error('Error getting tokens:', error);
     throw new Error(`Failed to authorize with Google: ${error.message}`);
@@ -86,12 +131,16 @@ async function setTokens(code) {
 }
 
 // Get upcoming events
-async function getUpcomingEvents(maxResults = 10) {
-  if (!tokens) {
-    await authorize();
+async function getUpcomingEvents(userId, maxResults = 10) {
+  // Get the user's tokens
+  if (!userId || !userTokensMap.has(userId)) {
+    await authorize(userId);
     throw new Error('Not authorized - please authorize first');
   }
 
+  // Set the OAuth client with user's tokens
+  oauth2Client.setCredentials(userTokensMap.get(userId));
+  
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
   
   const now = new Date();
@@ -169,12 +218,12 @@ async function parseNaturalLanguageToEvent(naturalText) {
   }
 }
 
-// Update addEvent function to clearly differentiate auth errors
-async function addEvent(eventData) {
-  // Check if we have tokens available
-  if (!tokens || !tokens.access_token) {
-    console.log('No tokens available, authorization required');
-    const authUrl = await authorize();
+// Update addEvent function to use user's tokens
+async function addEvent(eventData, userId) {
+  // Check if we have tokens for this user
+  if (!userId || !userTokensMap.has(userId)) {
+    console.log('No tokens available for user:', userId);
+    const authUrl = await authorize(userId);
     
     // If authorize returns a URL, it means we need user authorization
     if (typeof authUrl === 'string') {
@@ -182,6 +231,9 @@ async function addEvent(eventData) {
     }
   }
 
+  // Set the OAuth client with user's tokens
+  oauth2Client.setCredentials(userTokensMap.get(userId));
+  
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
   
   // Validate and format dates
@@ -214,16 +266,16 @@ async function addEvent(eventData) {
 }
 
 // Main function to handle natural language input
-async function handleNaturalLanguageInput(inputText) {
+async function handleNaturalLanguageInput(inputText, userId) {
   try {
-    console.log('Processing:', inputText);
+    console.log('Processing:', inputText, 'for user:', userId);
     
     // Parse natural language to event data
     const eventData = await parseNaturalLanguageToEvent(inputText);
     console.log('Parsed event data:', eventData);
     
     // Add event to calendar
-    const createdEvent = await addEvent(eventData);
+    const createdEvent = await addEvent(eventData, userId);
     return createdEvent;
   } catch (error) {
     console.error('Error handling natural language input:', error);
@@ -231,35 +283,11 @@ async function handleNaturalLanguageInput(inputText) {
   }
 }
 
-// Example usage
-async function main() {
-  try {
-    // For testing, you would first need to get an authorization code
-    // Then call setTokens(your_code) before other operations
-    
-    // Get upcoming events
-    await getUpcomingEvents();
-    
-    // Example natural language input
-    const naturalInput = "Schedule a meeting with the marketing team tomorrow at 2pm for 1 hour about the new campaign";
-    await handleNaturalLanguageInput(naturalInput);
-    
-    // Get updated events
-    await getUpcomingEvents();
-  } catch (error) {
-    console.error('Error in main:', error);
-  }
-}
-
-// Run the script
-if (require.main === module) {
-  main();
-}
-
 module.exports = {
   authorize,
   setTokens,
   getUpcomingEvents,
   handleNaturalLanguageInput,
-  addEvent
+  addEvent,
+  setGoogleTokens  // Export the new method
 };
