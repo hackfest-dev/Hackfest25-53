@@ -40,6 +40,8 @@ backend/tmp/
 backend/screenshots/
 backend/auth_info_baileys/
 **/tmp/screenshots/
+venv/
+__pycache__/
 
 # Screenshots temporary files
 **/screenshot_*.png
