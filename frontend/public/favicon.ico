@@ -1,0 +1,7 @@
+// This is a binary file, so we should create it by downloading a simple favicon.
+// Let's create instructions for the user:
+
+// Please add a favicon.ico file to c:\axentis\frontend\public\
+// You can download a simple one from https://favicon.io/ or use a default icon
+// Or run this command to create a simple one:
+// npx create-favicon --input ./src/assets/logo.png --output ./public

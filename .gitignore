@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+**/node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+**/coverage
+
+# Production
+/build
+**/build
+/dist
+**/dist
+
+# Frontend specific
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Backend specific
+backend/.env
+backend/config/config.local.js
+backend/config/config.prod.js
+backend/logs/
+backend/tmp/
+backend/screenshots/
+**/tmp/screenshots/
+
+# Screenshots temporary files
+**/screenshot_*.png
+**/browser_screenshot_*.png
+**/screenshot_script_*.ps1
+
+# Misc
+.DS_Store
+**/.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# IDE - JetBrains (WebStorm, IntelliJ, etc)
+.idea/
+*.iml
+*.iws
+*.ipr
+*.iws
+
+# Editor config
+.editorconfig
+
+# System Files
+Thumbs.db
