@@ -74,7 +74,7 @@ async function generateCommand(task) {
     
     const prompt = `Generate a bash command for ${process.platform} to: ${task}. Only return the command itself without any explanation or markdown.`;
     
-    const command = await aiService.queryGeminiAI(prompt, {
+    const command = await aiService.queryGroqAI(prompt, {
       currentDirectory: process.cwd(),
       terminalContext: "Command Generation"
     });
