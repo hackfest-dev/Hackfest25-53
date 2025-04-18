@@ -77,28 +77,61 @@ function CommandPanel() {
     setOutput('');
     
     try {
-      const generateResponse = await api.post('/command/generate', { task });
-      const generatedCommand = generateResponse.data.command;
+      // Check if this is a YouTube/video playback request
+      const isYouTubeRequest = /youtube|play|watch|video|song/i.test(task);
       
-      setOutput(`Generated command: ${generatedCommand}\n\nExecuting...\n`);
-      
-      const executeResponse = await api.post('/command/execute', { 
-        command: generatedCommand 
-      });
-      
-      setOutput(prev => prev + '\n' + executeResponse.data.output);
-      
-      setHistory(prev => [
-        { 
-          id: Date.now(), 
-          type: 'generate', 
-          task, 
-          command: generatedCommand,
-          output: executeResponse.data.output,
-          timestamp: new Date() 
-        }, 
-        ...prev
-      ].slice(0, 10));
+      if (isYouTubeRequest) {
+        setOutput(`Detected YouTube request. Processing: "${task}"...\n\nSearching and playing video...`);
+        
+        // Call the special YouTube endpoint
+        const youtubeResponse = await api.post('/command/youtube', { query: task });
+        
+        if (youtubeResponse.data.success) {
+          const videoInfo = youtubeResponse.data.videoInfo;
+          setOutput(prev => prev + `\n\n✅ Now playing: ${videoInfo.title}\nChannel: ${videoInfo.channelTitle}\nURL: ${youtubeResponse.data.videoUrl}`);
+          
+          // Add to history with special YouTube type
+          setHistory(prev => [
+            { 
+              id: Date.now(), 
+              type: 'youtube', 
+              task, 
+              command: `Playing YouTube video: ${videoInfo.title}`,
+              output: `Video played: ${videoInfo.title} (${videoInfo.channelTitle})`,
+              videoInfo: videoInfo,
+              videoUrl: youtubeResponse.data.videoUrl,
+              timestamp: new Date() 
+            }, 
+            ...prev
+          ].slice(0, 10));
+        } else {
+          throw new Error(youtubeResponse.data.error || 'Failed to play video');
+        }
+      } else {
+        // Original command generation flow for non-YouTube requests
+        const generateResponse = await api.post('/command/generate', { task });
+        const generatedCommand = generateResponse.data.command;
+        
+        setOutput(`Generated command: ${generatedCommand}\n\nExecuting...\n`);
+        
+        const executeResponse = await api.post('/command/execute', { 
+          command: generatedCommand 
+        });
+        
+        setOutput(prev => prev + '\n' + executeResponse.data.output);
+        
+        setHistory(prev => [
+          { 
+            id: Date.now(), 
+            type: 'generate', 
+            task, 
+            command: generatedCommand,
+            output: executeResponse.data.output,
+            timestamp: new Date() 
+          }, 
+          ...prev
+        ].slice(0, 10));
+      }
       
       setTask('');
       
@@ -114,6 +147,9 @@ function CommandPanel() {
     if (item.type === 'execute') {
       setCommand(item.command);
       setActiveTab('execute');
+    } else if (item.type === 'youtube') {
+      setTask(item.task);
+      setActiveTab('generate');
     } else {
       setTask(item.task);
       setActiveTab('generate');
@@ -228,14 +264,40 @@ function CommandPanel() {
                 {history.map(item => (
                   <div key={item.id} className="bg-gray-700 rounded-lg p-4 hover:bg-gray-650 transition-colors duration-200">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded-full">{item.type === 'execute' ? 'Executed' : 'Generated'}</span>
+                      <span className={`text-xs px-2 py-1 ${
+                        item.type === 'youtube' 
+                          ? 'bg-red-500/20 text-red-300' 
+                          : 'bg-indigo-500/20 text-indigo-300'
+                      } rounded-full`}>
+                        {item.type === 'execute' 
+                          ? 'Executed' 
+                          : item.type === 'youtube' 
+                            ? 'YouTube' 
+                            : 'Generated'}
+                      </span>
                       <span className="text-gray-400 text-xs">
                         {new Date(item.timestamp).toLocaleString()}
                       </span>
                     </div>
                     <div className="text-gray-200 mb-3 break-all">
-                      {item.type === 'execute' ? item.command : `Task: ${item.task}`}
+                      {item.type === 'execute' 
+                        ? item.command 
+                        : item.type === 'youtube'
+                          ? `Video: ${item.videoInfo?.title || 'YouTube video'}`
+                          : `Task: ${item.task}`}
                     </div>
+                    {item.type === 'youtube' && item.videoUrl && (
+                      <div className="mb-3">
+                        <a 
+                          href={item.videoUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Open video again
+                        </a>
+                      </div>
+                    )}
                     <button 
                       className="text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 px-3 py-1 rounded-md transition-colors duration-200"
                       onClick={() => handleRerunCommand(item)}
