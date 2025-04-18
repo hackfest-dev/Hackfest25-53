@@ -1,7 +1,7 @@
 import os
 
 
-LOG_DIR = "logs"
+LOG_DIR = "../frontend/public/logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "usage_log.json")
 CATEGORY_FILE = os.path.join(LOG_DIR, "categorized_log.json")
