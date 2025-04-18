@@ -10,7 +10,6 @@ function CommandPanel() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('execute');
 
-  // Load command history from localStorage on mount
   useEffect(() => {
     const savedHistory = localStorage.getItem('commandHistory');
     if (savedHistory) {
@@ -22,14 +21,12 @@ function CommandPanel() {
     }
   }, []);
 
-  // Save history to localStorage when it changes
   useEffect(() => {
     if (history.length > 0) {
       localStorage.setItem('commandHistory', JSON.stringify(history));
     }
   }, [history]);
 
-  // Execute a command directly
   const handleExecuteCommand = async (e) => {
     e.preventDefault();
     
@@ -45,7 +42,6 @@ function CommandPanel() {
     try {
       const response = await api.post('/command/execute', { command });
       
-      // Update output and history
       setOutput(response.data.output);
       setHistory(prev => [
         { 
@@ -56,9 +52,8 @@ function CommandPanel() {
           timestamp: new Date() 
         }, 
         ...prev
-      ].slice(0, 10)); // Keep only the last 10 commands
+      ].slice(0, 10));
       
-      // Reset command input
       setCommand('');
       
     } catch (error) {
@@ -69,7 +64,6 @@ function CommandPanel() {
     }
   };
 
-  // Generate and execute command from task description
   const handleGenerateCommand = async (e) => {
     e.preventDefault();
     
@@ -83,22 +77,17 @@ function CommandPanel() {
     setOutput('');
     
     try {
-      // First, generate the command
       const generateResponse = await api.post('/command/generate', { task });
       const generatedCommand = generateResponse.data.command;
       
-      // Show the generated command
       setOutput(`Generated command: ${generatedCommand}\n\nExecuting...\n`);
       
-      // Then execute it
       const executeResponse = await api.post('/command/execute', { 
         command: generatedCommand 
       });
       
-      // Update output with results
       setOutput(prev => prev + '\n' + executeResponse.data.output);
       
-      // Add to history
       setHistory(prev => [
         { 
           id: Date.now(), 
@@ -111,7 +100,6 @@ function CommandPanel() {
         ...prev
       ].slice(0, 10));
       
-      // Reset task input
       setTask('');
       
     } catch (error) {
@@ -122,7 +110,6 @@ function CommandPanel() {
     }
   };
 
-  // Rerun a command from history
   const handleRerunCommand = async (item) => {
     if (item.type === 'execute') {
       setCommand(item.command);
@@ -134,38 +121,38 @@ function CommandPanel() {
   };
 
   return (
-    <div className="command-panel">
-      <h1 className="page-title">Command Panel</h1>
+    <div className="bg-gray-900 text-gray-100 min-h-screen p-6">
+      <h1 className="text-3xl font-bold text-indigo-400 mb-6">Command Panel</h1>
       
-      <div className="tab-navigation">
+      <div className="flex mb-6 border-b border-gray-700">
         <button 
-          className={`tab-button ${activeTab === 'execute' ? 'active' : ''}`}
+          className={`px-4 py-2 mr-2 focus:outline-none transition-colors duration-200 ${activeTab === 'execute' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-gray-400 hover:text-gray-200'}`}
           onClick={() => setActiveTab('execute')}
         >
           Execute Command
         </button>
         <button 
-          className={`tab-button ${activeTab === 'generate' ? 'active' : ''}`}
+          className={`px-4 py-2 focus:outline-none transition-colors duration-200 ${activeTab === 'generate' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-gray-400 hover:text-gray-200'}`}
           onClick={() => setActiveTab('generate')}
         >
           Generate Command
         </button>
       </div>
       
-      <div className="tab-content">
+      <div className="space-y-6">
         {activeTab === 'execute' ? (
-          <div className="card">
-            <div className="card-header">
-              <h2 className="card-title">Execute Command</h2>
+          <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+              <h2 className="text-xl font-semibold text-indigo-300">Execute Command</h2>
             </div>
-            <div className="card-content">
+            <div className="p-6">
               <form onSubmit={handleExecuteCommand}>
-                <div className="form-group">
-                  <label htmlFor="command" className="form-label">Command</label>
+                <div className="mb-4">
+                  <label htmlFor="command" className="block text-sm font-medium text-gray-300 mb-2">Command</label>
                   <input
                     type="text"
                     id="command"
-                    className="form-input"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     placeholder="Enter system command..."
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
@@ -173,11 +160,11 @@ function CommandPanel() {
                   />
                 </div>
                 
-                {error && <div className="error-message">{error}</div>}
+                {error && <div className="mb-4 text-red-400 bg-red-900/30 p-3 rounded-md">{error}</div>}
                 
                 <button 
                   type="submit" 
-                  className="button button-primary"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md shadow transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={loading}
                 >
                   {loading ? 'Executing...' : 'Execute Command'}
@@ -186,17 +173,17 @@ function CommandPanel() {
             </div>
           </div>
         ) : (
-          <div className="card">
-            <div className="card-header">
-              <h2 className="card-title">Generate Command</h2>
+          <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+              <h2 className="text-xl font-semibold text-indigo-300">Generate Command</h2>
             </div>
-            <div className="card-content">
+            <div className="p-6">
               <form onSubmit={handleGenerateCommand}>
-                <div className="form-group">
-                  <label htmlFor="task" className="form-label">Task Description</label>
+                <div className="mb-4">
+                  <label htmlFor="task" className="block text-sm font-medium text-gray-300 mb-2">Task Description</label>
                   <textarea
                     id="task"
-                    className="form-textarea"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
                     placeholder="Describe what you want to do..."
                     value={task}
                     onChange={(e) => setTask(e.target.value)}
@@ -204,11 +191,11 @@ function CommandPanel() {
                   />
                 </div>
                 
-                {error && <div className="error-message">{error}</div>}
+                {error && <div className="mb-4 text-red-400 bg-red-900/30 p-3 rounded-md">{error}</div>}
                 
                 <button 
                   type="submit" 
-                  className="button button-primary"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md shadow transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={loading}
                 >
                   {loading ? 'Generating...' : 'Generate & Execute Command'}
@@ -219,38 +206,38 @@ function CommandPanel() {
         )}
         
         {output && (
-          <div className="card">
-            <div className="card-header">
-              <h2 className="card-title">Output</h2>
+          <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+              <h2 className="text-xl font-semibold text-indigo-300">Output</h2>
             </div>
-            <div className="card-content">
-              <pre className="command-output">{output}</pre>
+            <div className="p-6">
+              <pre className="bg-gray-900 p-4 rounded-md overflow-x-auto text-gray-300 whitespace-pre-wrap">{output}</pre>
             </div>
           </div>
         )}
         
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Command History</h2>
+        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+            <h2 className="text-xl font-semibold text-indigo-300">Command History</h2>
           </div>
-          <div className="card-content">
+          <div className="p-6">
             {history.length === 0 ? (
-              <p className="empty-list">No command history yet.</p>
+              <p className="text-gray-400 italic">No command history yet.</p>
             ) : (
-              <div className="history-list">
+              <div className="space-y-4">
                 {history.map(item => (
-                  <div key={item.id} className="history-item">
-                    <div className="history-header">
-                      <span className="history-type">{item.type === 'execute' ? 'Executed' : 'Generated'}</span>
-                      <span className="history-time">
+                  <div key={item.id} className="bg-gray-700 rounded-lg p-4 hover:bg-gray-650 transition-colors duration-200">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded-full">{item.type === 'execute' ? 'Executed' : 'Generated'}</span>
+                      <span className="text-gray-400 text-xs">
                         {new Date(item.timestamp).toLocaleString()}
                       </span>
                     </div>
-                    <div className="history-command">
+                    <div className="text-gray-200 mb-3 break-all">
                       {item.type === 'execute' ? item.command : `Task: ${item.task}`}
                     </div>
                     <button 
-                      className="button button-small"
+                      className="text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 px-3 py-1 rounded-md transition-colors duration-200"
                       onClick={() => handleRerunCommand(item)}
                     >
                       Rerun

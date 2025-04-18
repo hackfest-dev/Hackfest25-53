@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Route, Routes, NavLink } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import Dashboard from './components/Dashboard';
 import WhatsappControl from './components/WhatsappControl';
 import CommandPanel from './components/CommandPanel';
 import ScreenshotPanel from './components/ScreenshotPanel';
+import Navbar from './components/Navbar';
 import api from './services/api';
 
 // Initialize socket connection
@@ -70,24 +71,22 @@ function App() {
   };
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>WhatsApp Bot Platform</h1>
-        <div className="connection-status">
-          <span className={isConnected ? 'connected' : 'disconnected'}>
-            {isConnected ? 'Connected to Backend' : 'Disconnected'}
-          </span>
+    <div className="flex flex-col min-h-screen bg-gray-900 text-gray-100">
+      <header className="bg-gray-800 border-b border-gray-700 shadow-md py-4 px-6">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-indigo-400">WhatsApp Bot Platform</h1>
+          <div className="connection-status">
+            <span className={`px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+              {isConnected ? 'Connected to Backend' : 'Disconnected'}
+            </span>
+          </div>
         </div>
       </header>
 
-      <nav className="app-nav">
-        <NavLink to="/" end>Dashboard</NavLink>
-        <NavLink to="/whatsapp">WhatsApp Bot</NavLink>
-        <NavLink to="/commands">Command Panel</NavLink>
-        <NavLink to="/screenshots">Screenshot Panel</NavLink>
-      </nav>
+      {/* Use the Navbar component instead of inline navigation */}
+      <Navbar />
 
-      <main className="app-content">
+      <main className="flex-grow">
         <Routes>
           <Route path="/" element={<Dashboard socket={socket} />} />
           <Route path="/whatsapp" element={<WhatsappControl socket={socket} />} />
@@ -96,9 +95,16 @@ function App() {
         </Routes>
       </main>
 
-      <div className="notifications-container">
+      <div className="fixed bottom-4 right-4 space-y-2 max-w-md">
         {notifications.map(notification => (
-          <div key={notification.id} className={`notification ${notification.type}`}>
+          <div 
+            key={notification.id} 
+            className={`p-3 rounded-lg shadow-lg animate-fade-in ${
+              notification.type === 'error' 
+                ? 'bg-red-900/90 text-red-200 border-l-4 border-red-500'
+                : 'bg-gray-800/90 text-gray-200 border-l-4 border-indigo-500'
+            }`}
+          >
             {notification.message}
           </div>
         ))}

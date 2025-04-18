@@ -11,12 +11,10 @@ function WhatsappControl({ socket }) {
   const [error, setError] = useState(null);
   const chatContainerRef = useRef(null);
 
-  // Fetch QR code and status on mount
   useEffect(() => {
     fetchQrCode();
     fetchStatus();
 
-    // Socket listeners for real-time updates
     socket.on('whatsapp-qr', (data) => {
       setQrCode(data.qr);
     });
@@ -39,7 +37,6 @@ function WhatsappControl({ socket }) {
       }]);
     });
 
-    // Function to periodically check status and QR code
     const intervalId = setInterval(() => {
       fetchStatus();
       if (!status.connected) {
@@ -55,14 +52,12 @@ function WhatsappControl({ socket }) {
     };
   }, [socket, status.connected]);
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Fetch QR code from API
   const fetchQrCode = async () => {
     try {
       const response = await api.get('/bot/qr');
@@ -74,7 +69,6 @@ function WhatsappControl({ socket }) {
     }
   };
 
-  // Fetch connection status from API
   const fetchStatus = async () => {
     try {
       const response = await api.get('/bot/status');
@@ -84,7 +78,6 @@ function WhatsappControl({ socket }) {
     }
   };
 
-  // Handle input changes
   const handleInputChange = (e) => {
     setMessageInput({
       ...messageInput,
@@ -92,7 +85,6 @@ function WhatsappControl({ socket }) {
     });
   };
 
-  // Send a message
   const handleSendMessage = async (e) => {
     e.preventDefault();
     
@@ -110,7 +102,6 @@ function WhatsappControl({ socket }) {
         message: messageInput.message
       });
       
-      // Add sent message to the list
       setMessages(prev => [...prev, {
         id: Date.now(),
         sender: messageInput.number,
@@ -119,7 +110,6 @@ function WhatsappControl({ socket }) {
         type: 'outgoing'
       }]);
       
-      // Clear message input but keep the number
       setMessageInput({
         ...messageInput,
         message: ''
@@ -133,48 +123,48 @@ function WhatsappControl({ socket }) {
   };
 
   return (
-    <div className="whatsapp-control">
-      <h1 className="page-title">WhatsApp Bot Control</h1>
+    <div className="bg-gray-900 text-gray-100 min-h-screen p-6">
+      <h1 className="text-3xl font-bold text-indigo-400 mb-6">WhatsApp Bot Control</h1>
       
-      <div className="grid-container two-col">
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Connection Status</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+            <h2 className="text-xl font-semibold text-indigo-300">Connection Status</h2>
           </div>
-          <div className="card-content">
-            <div className="status-indicator">
-              <span className={`status-dot ${status.connected ? 'connected' : 'disconnected'}`}></span>
-              <span className="status-text">{status.connected ? 'Connected' : 'Disconnected'}</span>
+          <div className="p-6">
+            <div className="flex items-center mb-6">
+              <span className={`w-3 h-3 rounded-full mr-2 ${status.connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+              <span className="text-lg">{status.connected ? 'Connected' : 'Disconnected'}</span>
             </div>
             
             {!status.connected && qrCode && (
-              <div className="qr-container">
-                <p>Scan this QR code with WhatsApp to log in:</p>
+              <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg">
+                <p className="text-gray-900 mb-4">Scan this QR code with WhatsApp to log in:</p>
                 <QRCodeSVG value={qrCode} size={250} />
               </div>
             )}
             
             {!status.connected && !qrCode && (
-              <div className="loading-qr">
-                <p>Waiting for QR code...</p>
+              <div className="flex items-center justify-center h-40 bg-gray-700/30 rounded-lg">
+                <p className="text-gray-400">Waiting for QR code...</p>
               </div>
             )}
           </div>
         </div>
         
-        <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">Send Message</h2>
+        <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+            <h2 className="text-xl font-semibold text-indigo-300">Send Message</h2>
           </div>
-          <div className="card-content">
+          <div className="p-6">
             <form onSubmit={handleSendMessage}>
-              <div className="form-group">
-                <label htmlFor="number" className="form-label">Phone Number (with country code, no +)</label>
+              <div className="mb-4">
+                <label htmlFor="number" className="block text-sm font-medium text-gray-300 mb-2">Phone Number (with country code, no +)</label>
                 <input
                   type="text"
                   id="number"
                   name="number"
-                  className="form-input"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   placeholder="e.g. 911234567890"
                   value={messageInput.number}
                   onChange={handleInputChange}
@@ -182,12 +172,12 @@ function WhatsappControl({ socket }) {
                 />
               </div>
               
-              <div className="form-group">
-                <label htmlFor="message" className="form-label">Message</label>
+              <div className="mb-4">
+                <label htmlFor="message" className="block text-sm font-medium text-gray-300 mb-2">Message</label>
                 <textarea
                   id="message"
                   name="message"
-                  className="form-textarea"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
                   placeholder="Type your message here..."
                   value={messageInput.message}
                   onChange={handleInputChange}
@@ -195,11 +185,11 @@ function WhatsappControl({ socket }) {
                 />
               </div>
               
-              {error && <div className="error-message">{error}</div>}
+              {error && <div className="mb-4 text-red-400 bg-red-900/30 p-3 rounded-md">{error}</div>}
               
               <button 
                 type="submit" 
-                className="button button-primary"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md shadow transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={loading || !status.connected}
               >
                 {loading ? 'Sending...' : 'Send Message'}
@@ -209,34 +199,43 @@ function WhatsappControl({ socket }) {
         </div>
       </div>
       
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">Message History</h2>
+      <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        <div className="bg-gray-700 px-6 py-4 border-b border-gray-600">
+          <h2 className="text-xl font-semibold text-indigo-300">Message History</h2>
         </div>
-        <div className="chat-container" ref={chatContainerRef}>
+        <div className="bg-gray-750 p-6 max-h-[500px] overflow-y-auto" ref={chatContainerRef}>
           {messages.length === 0 ? (
-            <div className="empty-chat">
-              <p>No messages yet. Send a message to get started.</p>
+            <div className="flex items-center justify-center h-40 bg-gray-700/30 rounded-lg">
+              <p className="text-gray-400">No messages yet. Send a message to get started.</p>
             </div>
           ) : (
-            messages.map(message => (
-              <div key={message.id} className={`chat-message ${message.type}`}>
-                <div className="message-content">
-                  {message.text}
-                </div>
-                {message.response && (
-                  <div className="message-response">
-                    <strong>Response:</strong> {message.response}
+            <div className="space-y-4">
+              {messages.map(message => (
+                <div 
+                  key={message.id} 
+                  className={`max-w-[80%] rounded-lg p-4 ${
+                    message.type === 'outgoing' 
+                      ? 'bg-indigo-600 ml-auto' 
+                      : 'bg-gray-700 mr-auto'
+                  }`}
+                >
+                  <div className="text-white mb-2">
+                    {message.text}
                   </div>
-                )}
-                <div className="message-meta">
-                  <span className="message-sender">{message.sender}</span>
-                  <span className="message-time">
-                    {message.timestamp.toLocaleTimeString()}
-                  </span>
+                  {message.response && (
+                    <div className="mt-2 pt-2 border-t border-gray-600 text-gray-300">
+                      <strong>Response:</strong> {message.response}
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center mt-2 text-xs">
+                    <span className="text-gray-300">{message.sender}</span>
+                    <span className="text-gray-400">
+                      {message.timestamp.toLocaleTimeString()}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       </div>
