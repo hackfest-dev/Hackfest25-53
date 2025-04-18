@@ -93,4 +93,48 @@ router.post('/youtube', async (req, res) => {
   }
 });
 
+// Handle calendar command
+router.post('/calendar', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        message: 'Text is required'
+      });
+    }
+    
+    const calendarManager = require('../services/calendarManager');
+    
+    try {
+      const event = await calendarManager.handleNaturalLanguageInput(text);
+      
+      res.json({
+        success: true,
+        event,
+        calendarLink: event.htmlLink
+      });
+    } catch (error) {
+      if (error.message.includes('Not authorized')) {
+        const authUrl = await calendarManager.authorize();
+        return res.status(401).json({
+          success: false,
+          error: 'Google Calendar authorization required',
+          authUrl
+        });
+      }
+      
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error handling calendar command:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process calendar command',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

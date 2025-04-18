@@ -229,8 +229,61 @@ async function processTextCommand(text) {
   try {
     logger.info(`Processing text as command: ${text}`);
     
+    // Check if this is a calendar-related request
+    const isCalendarRequest = /calendar|schedule|event|meeting|appointment|remind/i.test(text);
+    
     // Check if this is a YouTube or video playback request
     const isYouTubeRequest = /youtube|play|watch|video/i.test(text);
+    
+    if (isCalendarRequest) {
+      logger.info(`Detected calendar request: ${text}`);
+      
+      try {
+        // Use the calendar manager to handle the request
+        const calendarManager = require('./calendarManager');
+        const result = await calendarManager.handleNaturalLanguageInput(text);
+        
+        // Log the calendar action
+        logCommandToFile({
+          type: 'calendar',
+          text,
+          event: result,
+          success: true
+        });
+        
+        return {
+          success: true,
+          type: 'calendar',
+          text,
+          event: result
+        };
+      } catch (error) {
+        // Handle authorization errors with auto-open flow
+        if (error.message.includes('Not authorized')) {
+          const calendarManager = require('./calendarManager');
+          const authUrl = await calendarManager.authorize();
+          
+          // Log that we're directing to authorization
+          logCommandToFile({
+            type: 'calendar-auth',
+            text,
+            error: 'Authorization required',
+            authUrl,
+            success: false
+          });
+          
+          // Create a result that will trigger automatic browser opening
+          return {
+            success: false,
+            type: 'calendar-auth',
+            text,
+            needsAuth: true,
+            authUrl
+          };
+        }
+        throw error;
+      }
+    }
     
     if (isYouTubeRequest) {
       logger.info(`Detected YouTube request: ${text}`);
@@ -256,7 +309,7 @@ async function processTextCommand(text) {
       return result;
     }
     
-    // For non-YouTube requests, proceed with the original command generation flow
+    // For non-YouTube and non-calendar requests, proceed with the original command generation flow
     // Generate command using AI
     const generatedResult = await generateCommand(text);
     const command = generatedResult.command;

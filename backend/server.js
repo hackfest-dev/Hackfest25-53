@@ -10,11 +10,12 @@ const { createLogger } = require('./utils/logger');
 const botRoutes = require('./routes/botRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
 const commandRoutes = require('./routes/commandRoutes');
+const calendarRoutes = require('./routes/calendarRoutes'); // ✅ FIXED typo from calenderRoutes
 
 // Initialize logger
 const logger = createLogger('server');
 
-// Create Express app
+// Create Express app and server
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
@@ -28,39 +29,42 @@ const io = socketIO(server, {
 const tmpDir = path.join(__dirname, 'tmp');
 if (!fs.existsSync(tmpDir)) {
   fs.mkdirSync(tmpDir, { recursive: true });
+  logger.info('Temporary directory created at:', tmpDir);
 }
 
-// Middleware
+// Middleware setup
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Debug middleware to log all requests
+// Log all incoming requests
 app.use((req, res, next) => {
-  logger.info(`Incoming request: ${req.method} ${req.url}`);
+  logger.info(`Incoming request: ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Test route to check if API is alive
+// Health check route
 app.get('/api/test', (req, res) => {
   logger.info('Test route accessed');
-  return res.json({ success: true, message: 'API is working' });
+  res.json({ success: true, message: 'API is working' });
 });
 
-// Pass socket.io instance to bot service
+// Initialize WhatsApp service with socket.io
 const botService = require('./services/whatsappService');
 botService.initializeSocketIO(io);
 
-// IMPORTANT: Uncomment the route registrations
+// Register API routes
 logger.info('Registering API routes...');
 app.use('/api/bot', botRoutes);
 app.use('/api/screenshot', screenshotRoutes);
 app.use('/api/command', commandRoutes);
+app.use('/api/calendar', calendarRoutes); // ✅ FIXED typo
 
 // Debug: Log registered routes
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {
-    logger.info(`Route: ${Object.keys(middleware.route.methods).join(',')} ${middleware.route.path}`);
+    const methods = Object.keys(middleware.route.methods).join(',').toUpperCase();
+    logger.info(`Route: ${methods} ${middleware.route.path}`);
   } else if (middleware.name === 'router') {
     middleware.handle.stack.forEach((handler) => {
       if (handler.route) {
@@ -71,40 +75,40 @@ app._router.stack.forEach((middleware) => {
   }
 });
 
-// Socket.io connection handling
-io.on('connection', (socket) => {
+// Handle socket.io connections
+io.on('connection', async (socket) => {
   logger.info(`New client connected: ${socket.id}`);
-  
-  // Emit current status to the new client
+
   try {
     const status = botService.getStatus();
     const qr = botService.getQRCode();
-    socket.emit('whatsapp-status', { 
+
+    socket.emit('whatsapp-status', {
       status: status.connected ? 'connected' : 'disconnected',
       message: status.connected ? 'Connected to WhatsApp' : 'Not connected'
     });
-    
+
     if (qr && !status.connected) {
       socket.emit('whatsapp-qr', { qr });
     }
-    
+
     logger.info('Sent initial status to new client');
   } catch (error) {
-    logger.error('Error sending initial status:', error);
+    logger.error('Error during socket init:', error);
+    socket.emit('error', { message: 'Failed to fetch initial status' });
   }
-  
+
   socket.on('disconnect', () => {
     logger.info(`Client disconnected: ${socket.id}`);
   });
-  
-  socket.on('send-message', async (data) => {
+
+  socket.on('send-message', async ({ number, message }) => {
     try {
-      const { number, message } = data;
       const response = await botService.sendMessage(number, message);
       io.emit('message-status', response);
     } catch (error) {
       logger.error('Error sending message:', error);
-      io.emit('error', { message: error.message });
+      socket.emit('error', { message: 'Failed to send message' });
     }
   });
 });
@@ -112,15 +116,15 @@ io.on('connection', (socket) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-  logger.info(`Access the API at: http://localhost:${PORT}/api`);
+  logger.info(`🚀 Server is running on port ${PORT}`);
+  logger.info(`🌐 API is available at http://localhost:${PORT}/api`);
 });
 
-// Error handling
+// Handle fatal errors gracefully
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
+  logger.error('❗ Uncaught Exception:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('❗ Unhandled Rejection at:', promise, 'reason:', reason);
 });

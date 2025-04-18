@@ -77,20 +77,89 @@ function CommandPanel() {
     setOutput('');
     
     try {
-      // Check if this is a YouTube/video playback request
+      const isCalendarRequest = /calendar|schedule|event|meeting|appointment|remind/i.test(task);
       const isYouTubeRequest = /youtube|play|watch|video|song/i.test(task);
       
-      if (isYouTubeRequest) {
+      if (isCalendarRequest) {
+        setOutput(`Detected calendar request. Processing: "${task}"...\n\nAdding to calendar...`);
+        
+        try {
+          const calendarResponse = await api.post('/calendar/events/natural', { text: task });
+          
+          if (calendarResponse.data.success) {
+            const eventDetails = calendarResponse.data.event;
+            setOutput(prev => prev + `\n\n✅ Event added: ${eventDetails.summary}\nStart: ${new Date(eventDetails.start.dateTime).toLocaleString()}\nEnd: ${new Date(eventDetails.end.dateTime).toLocaleString()}`);
+            
+            if (calendarResponse.data.calendarLink) {
+              setOutput(prev => prev + `\n\nView in Google Calendar: ${calendarResponse.data.calendarLink}`);
+            }
+            
+            setHistory(prev => [
+              { 
+                id: Date.now(), 
+                type: 'calendar', 
+                task, 
+                command: `Adding event: ${eventDetails.summary}`,
+                output: `Event added: ${eventDetails.summary}`,
+                eventDetails: eventDetails,
+                calendarLink: calendarResponse.data.calendarLink,
+                timestamp: new Date() 
+              }, 
+              ...prev
+            ].slice(0, 10));
+          } else {
+            if (calendarResponse.data.authUrl) {
+              window.open(calendarResponse.data.authUrl, '_blank');
+              
+              setOutput(prev => prev + `\n\n⚠️ Google Calendar authorization required. Opening authorization page in a new tab...\n\nPlease complete the authorization process to continue.`);
+              
+              setHistory(prev => [
+                { 
+                  id: Date.now(), 
+                  type: 'auth', 
+                  task: 'Google Calendar Authorization', 
+                  command: 'Authorize Calendar Access',
+                  output: 'Authorization page opened in new tab',
+                  authUrl: calendarResponse.data.authUrl,
+                  timestamp: new Date() 
+                }, 
+                ...prev
+              ].slice(0, 10));
+            } else {
+              throw new Error(calendarResponse.data.error || 'Failed to add event to calendar');
+            }
+          }
+        } catch (error) {
+          if (error.response?.status === 401 && error.response?.data?.authUrl) {
+            window.open(error.response.data.authUrl, '_blank');
+            
+            setOutput(prev => `${prev}\n\n⚠️ Google Calendar authorization required. Authorization page opened in a new tab.\n\nPlease complete the authorization process to continue.`);
+            
+            setHistory(prev => [
+              { 
+                id: Date.now(), 
+                type: 'auth', 
+                task: 'Google Calendar Authorization', 
+                command: 'Authorize Calendar Access',
+                output: 'Authorization page opened in new tab',
+                authUrl: error.response.data.authUrl,
+                timestamp: new Date() 
+              }, 
+              ...prev
+            ].slice(0, 10));
+          } else {
+            throw error;
+          }
+        }
+      } else if (isYouTubeRequest) {
         setOutput(`Detected YouTube request. Processing: "${task}"...\n\nSearching and playing video...`);
         
-        // Call the special YouTube endpoint
         const youtubeResponse = await api.post('/command/youtube', { query: task });
         
         if (youtubeResponse.data.success) {
           const videoInfo = youtubeResponse.data.videoInfo;
           setOutput(prev => prev + `\n\n✅ Now playing: ${videoInfo.title}\nChannel: ${videoInfo.channelTitle}\nURL: ${youtubeResponse.data.videoUrl}`);
           
-          // Add to history with special YouTube type
           setHistory(prev => [
             { 
               id: Date.now(), 
@@ -108,7 +177,6 @@ function CommandPanel() {
           throw new Error(youtubeResponse.data.error || 'Failed to play video');
         }
       } else {
-        // Original command generation flow for non-YouTube requests
         const generateResponse = await api.post('/command/generate', { task });
         const generatedCommand = generateResponse.data.command;
         
@@ -143,6 +211,33 @@ function CommandPanel() {
     }
   };
 
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authCode = urlParams.get('code');
+    
+    if (authCode) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      setOutput("Processing Google Calendar authorization...");
+      setLoading(true);
+      
+      api.post('/calendar/oauth2callback', { code: authCode })
+        .then(response => {
+          if (response.data.success) {
+            setOutput("✅ Successfully authorized with Google Calendar! You can now create calendar events.");
+          } else {
+            setOutput("❌ Authorization failed: " + response.data.error);
+          }
+        })
+        .catch(error => {
+          setOutput("❌ Authorization error: " + (error.response?.data?.error || error.message));
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, []);
+
   const handleRerunCommand = async (item) => {
     if (item.type === 'execute') {
       setCommand(item.command);
@@ -150,10 +245,17 @@ function CommandPanel() {
     } else if (item.type === 'youtube') {
       setTask(item.task);
       setActiveTab('generate');
+    } else if (item.type === 'calendar') {
+      setTask(item.task);
+      setActiveTab('generate');
     } else {
       setTask(item.task);
       setActiveTab('generate');
     }
+  };
+
+  const handleOpenAuthUrl = (url) => {
+    window.open(url, '_blank');
   };
 
   return (
@@ -267,13 +369,21 @@ function CommandPanel() {
                       <span className={`text-xs px-2 py-1 ${
                         item.type === 'youtube' 
                           ? 'bg-red-500/20 text-red-300' 
-                          : 'bg-indigo-500/20 text-indigo-300'
+                          : item.type === 'calendar'
+                            ? 'bg-green-500/20 text-green-300'
+                            : item.type === 'auth'
+                              ? 'bg-yellow-500/20 text-yellow-300'
+                              : 'bg-indigo-500/20 text-indigo-300'
                       } rounded-full`}>
                         {item.type === 'execute' 
                           ? 'Executed' 
                           : item.type === 'youtube' 
                             ? 'YouTube' 
-                            : 'Generated'}
+                            : item.type === 'calendar'
+                              ? 'Calendar'
+                              : item.type === 'auth'
+                                ? 'Auth'
+                                : 'Generated'}
                       </span>
                       <span className="text-gray-400 text-xs">
                         {new Date(item.timestamp).toLocaleString()}
@@ -284,7 +394,11 @@ function CommandPanel() {
                         ? item.command 
                         : item.type === 'youtube'
                           ? `Video: ${item.videoInfo?.title || 'YouTube video'}`
-                          : `Task: ${item.task}`}
+                          : item.type === 'calendar'
+                            ? `Event: ${item.eventDetails?.summary || 'Calendar event'}`
+                            : item.type === 'auth'
+                              ? 'Google Calendar Authorization'
+                              : `Task: ${item.task}`}
                     </div>
                     {item.type === 'youtube' && item.videoUrl && (
                       <div className="mb-3">
@@ -296,6 +410,28 @@ function CommandPanel() {
                         >
                           Open video again
                         </a>
+                      </div>
+                    )}
+                    {item.type === 'calendar' && item.calendarLink && (
+                      <div className="mb-3">
+                        <a 
+                          href={item.calendarLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-green-400 hover:text-green-300 text-sm"
+                        >
+                          View in Google Calendar
+                        </a>
+                      </div>
+                    )}
+                    {item.type === 'auth' && item.authUrl && (
+                      <div className="mb-3">
+                        <button 
+                          onClick={() => handleOpenAuthUrl(item.authUrl)}
+                          className="text-yellow-400 hover:text-yellow-300 text-sm font-medium bg-yellow-900/30 px-3 py-2 rounded inline-block"
+                        >
+                          Open Authorization Page
+                        </button>
                       </div>
                     )}
                     <button 
