@@ -9,51 +9,85 @@ function WhatsappControl({ socket }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [backendStatus, setBackendStatus] = useState({ isAlive: true, checking: false });
   const chatContainerRef = useRef(null);
 
+  const checkBackendConnection = async () => {
+    setBackendStatus(prev => ({ ...prev, checking: true }));
+    try {
+      const result = await api.healthCheck();
+      setBackendStatus({ isAlive: result.isAlive, checking: false, message: result.message });
+      
+      if (result.isAlive) {
+        fetchStatus();
+        if (!status.connected && !qrCode) {
+          fetchQrCode();
+        }
+      }
+    } catch (err) {
+      setBackendStatus({ 
+        isAlive: false, 
+        checking: false, 
+        message: "Cannot connect to backend server" 
+      });
+    }
+  };
+
   useEffect(() => {
-    fetchQrCode();
-    fetchStatus();
+    checkBackendConnection();
+    
+    const intervalId = setInterval(checkBackendConnection, 15000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
 
-    socket.on('whatsapp-qr', (data) => {
-      console.log('Received QR code from socket:', !!data.qr);
-      setQrCode(data.qr);
-    });
-
-    socket.on('whatsapp-status', (data) => {
-      console.log('Received status update:', data);
-      setStatus({ connected: data.status === 'connected' });
-      if (data.status === 'connected') {
-        setQrCode(null);
-      }
-    });
-
-    socket.on('whatsapp-message', (data) => {
-      setMessages(prev => [...prev, {
-        id: Date.now(),
-        sender: data.sender,
-        text: data.message,
-        response: data.response,
-        timestamp: new Date(data.timestamp),
-        type: 'incoming'
-      }]);
-    });
-
-    const intervalId = setInterval(() => {
+  useEffect(() => {
+    if (backendStatus.isAlive) {
+      fetchQrCode();
       fetchStatus();
-      if (!status.connected && !qrCode) {
-        console.log('Polling for QR code...');
-        fetchQrCode();
-      }
-    }, 5000);
 
-    return () => {
-      socket.off('whatsapp-qr');
-      socket.off('whatsapp-status');
-      socket.off('whatsapp-message');
-      clearInterval(intervalId);
-    };
-  }, [socket, status.connected]);
+      socket.on('whatsapp-qr', (data) => {
+        console.log('Received QR code from socket:', !!data.qr);
+        setQrCode(data.qr);
+      });
+
+      socket.on('whatsapp-status', (data) => {
+        console.log('Received status update:', data);
+        setStatus({ connected: data.status === 'connected' });
+        if (data.status === 'connected') {
+          setQrCode(null);
+        }
+      });
+
+      socket.on('whatsapp-message', (data) => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          sender: data.sender,
+          text: data.message,
+          response: data.response,
+          timestamp: new Date(data.timestamp),
+          type: 'incoming'
+        }]);
+      });
+
+      const statusInterval = setInterval(() => {
+        if (backendStatus.isAlive) {
+          fetchStatus();
+          if (!status.connected && !qrCode) {
+            console.log('Polling for QR code...');
+            fetchQrCode();
+          }
+        }
+      }, 5000);
+
+      return () => {
+        socket.off('whatsapp-qr');
+        socket.off('whatsapp-status');
+        socket.off('whatsapp-message');
+        clearInterval(statusInterval);
+      };
+    }
+  }, [socket, status.connected, backendStatus.isAlive]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -133,8 +167,6 @@ function WhatsappControl({ socket }) {
       setLoading(true);
       console.log('Logging out WhatsApp session...');
       
-      // Try a direct fetch instead of axios
-      console.log('Trying direct fetch approach...');
       const fetchResponse = await fetch(`${api.defaults.baseURL}/bot/logout`, {
         method: 'POST',
         headers: {
@@ -145,11 +177,9 @@ function WhatsappControl({ socket }) {
       const responseData = await fetchResponse.json();
       console.log('Fetch response:', responseData);
       
-      // Clear QR code and status
       setQrCode(null);
       setStatus({ connected: false });
       
-      // Start polling for new QR code
       setTimeout(fetchQrCode, 3000);
     } catch (error) {
       console.error('Error logging out:', error);
@@ -162,6 +192,22 @@ function WhatsappControl({ socket }) {
   return (
     <div className="bg-gray-900 text-gray-100 min-h-screen p-6">
       <h1 className="text-3xl font-bold text-indigo-400 mb-6">WhatsApp Bot Control</h1>
+      
+      {!backendStatus.isAlive && (
+        <div className="bg-red-900 text-white p-4 rounded-lg mb-6 flex items-center justify-between">
+          <div>
+            <p className="font-bold">Backend Connection Error</p>
+            <p className="text-sm">{backendStatus.message || "Cannot connect to backend server"}</p>
+          </div>
+          <button 
+            onClick={checkBackendConnection} 
+            disabled={backendStatus.checking}
+            className="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded"
+          >
+            {backendStatus.checking ? 'Checking...' : 'Retry Connection'}
+          </button>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">

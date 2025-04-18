@@ -2,6 +2,7 @@ const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whis
 const { Boom } = require("@hapi/boom");
 const fs = require('fs').promises;
 const path = require('path');
+const pino = require('pino');
 const { createLogger } = require('../utils/logger');
 const config = require('../config/config');
 const aiService = require('./aiService');
@@ -16,34 +17,64 @@ const conversationHistory = {};
 // Function to initialize socket.io for real-time updates
 function initializeSocketIO(socketIO) {
   io = socketIO;
+  // If we already have a QR code when socket connects, send it immediately
+  if (qrCode && io) {
+    io.emit('whatsapp-qr', { qr: qrCode });
+    logger.info('Sent existing QR code to newly connected client');
+  }
 }
 
 // Function to start the WhatsApp bot
 async function startBot() {
   try {
+    logger.info('Starting WhatsApp bot...');
+    
+    // Clear any existing QR code
+    qrCode = null;
+    
     const authFolder = path.join(__dirname, '..', config.whatsapp.authFolder);
+    logger.info(`Using auth folder: ${authFolder}`);
+    
+    // Ensure auth folder exists
+    try {
+      await fs.mkdir(authFolder, { recursive: true });
+    } catch (error) {
+      logger.error(`Error creating auth folder: ${error.message}`);
+    }
+    
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
 
-    // Create the socket connection
+    // Create the socket connection with configuration similar to bot.cjs
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: true,
-      logger: pino({ level: "silent" })
+      logger: pino({ level: "silent" }), // Simplified logging
+      browser: ['Axentis Bot', 'Chrome', '10.0.0'],
+      syncFullHistory: false // Don't sync full history for faster login
     });
 
     // Save credentials when they're updated
     sock.ev.on("creds.update", saveCreds);
 
-    // Handle connection updates
+    // Handle connection updates with more detailed logging
     sock.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect, qr } = update;
       
+      logger.info(`Connection update: ${JSON.stringify(update, (key, value) => {
+        // Don't log the full QR code string in logs
+        if (key === 'qr' && value) return 'QR code received (hidden)';
+        return value;
+      })}`);
+      
       if (qr) {
+        logger.info('New QR code generated!');
         qrCode = qr;
+        
+        // Send QR code to frontend via socket.io
         if (io) {
+          logger.info('Emitting QR code to frontend');
           io.emit('whatsapp-qr', { qr });
         }
-        logger.info('New QR code generated');
       }
       
       if (connection === "close") {
@@ -98,6 +129,49 @@ async function startBot() {
   }
 }
 
+// New function to logout and clear auth
+async function logout() {
+  logger.info('Logging out WhatsApp session...');
+  
+  try {
+    // Clear the existing WhatsApp session
+    const authFolder = path.join(__dirname, '..', config.whatsapp.authFolder);
+    
+    // List all files in the auth folder
+    const files = await fs.readdir(authFolder);
+    logger.info(`Found ${files.length} auth files to remove`);
+    
+    // Delete each file
+    for (const file of files) {
+      const filePath = path.join(authFolder, file);
+      await fs.unlink(filePath);
+      logger.info(`Deleted auth file: ${file}`);
+    }
+    
+    // Reset connection state
+    isConnected = false;
+    qrCode = null;
+    
+    // Notify clients of logout
+    if (io) {
+      io.emit('whatsapp-status', { 
+        status: 'disconnected', 
+        message: "Logged out" 
+      });
+    }
+    
+    // Restart the bot to generate new QR code
+    sock?.ev?.removeAllListeners(); // Clean up all listeners
+    sock = null;
+    await startBot();
+    
+    return { success: true, message: 'Logged out successfully' };
+  } catch (error) {
+    logger.error('Error during logout:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Function to process incoming messages
 async function processIncomingMessage(msg) {
   try {
@@ -138,63 +212,31 @@ async function processIncomingMessage(msg) {
     if (text) {
       logger.info(`Message from ${sender}: ${text}`);
       
-      // Send "typing" indicator to simulate AI thinking
+      // Send "typing" indicator to simulate thinking
       await sock.sendPresenceUpdate('composing', sender);
       
-      // Check if this is a system command (starts with /s)
-      if (text.startsWith("/s ")) {
-        // Handle system command
-        await handleSystemCommand(text, sender, sock);
-      } else {
-        // Add user message to conversation history
-        conversationHistory[sender].push({ role: "user", content: text });
-        
-        // Keep only last 10 messages for context
-        if (conversationHistory[sender].length > 10) {
-          conversationHistory[sender] = conversationHistory[sender].slice(-10);
+      try {
+        // Check message type and process accordingly
+        if (text.startsWith("/chat ")) {
+          // CHAT MODE: AI conversation for messages starting with /chat
+          const chatPrompt = text.substring(6).trim();
+          await handleAIChatMode(chatPrompt, sender, sock, mediaData);
+        } else if (text.startsWith("/s ")) {
+          // For backward compatibility - keep /s command handler
+          await handleSystemCommand(text, sender, sock);
+        } else {
+          // DEFAULT MODE: Process all other messages as PC control commands
+          await handleCommandMode(text, sender, sock);
         }
-        
-        // Prepare context for AI
-        const context = {
-          currentDirectory: "/whatsapp/chat",
-          terminalContext: "WhatsApp Bot Environment",
-          recentCommands: conversationHistory[sender]
-            .map(msg => `${msg.role}: ${msg.content}`)
-            .join('\n'),
-          screenshot: mediaData
-        };
-        
-        // Send a "thinking" message for better UX
-        if (text.length > 50) {
-          await sock.sendMessage(sender, { text: "Thinking..." });
-        }
-        
-        // Random delay to simulate thinking (1-3 seconds)
-        const thinkingTime = 1000 + Math.random() * 2000;
-        await new Promise(resolve => setTimeout(resolve, thinkingTime));
-        
-        // Get AI response
-        const aiResponse = await aiService.queryGeminiAI(text, context);
-        
-        // Add AI response to conversation history
-        conversationHistory[sender].push({ role: "assistant", content: aiResponse });
-        
-        // Send the AI response
-        await sock.sendMessage(sender, { text: aiResponse });
-        
-        // Emit message to frontend via socket.io
-        if (io) {
-          io.emit('whatsapp-message', {
-            sender,
-            message: text,
-            response: aiResponse,
-            timestamp: new Date()
-          });
-        }
+      } catch (error) {
+        logger.error("Error processing message:", error);
+        await sock.sendMessage(sender, { 
+          text: `❌ Error: ${error.message}` 
+        });
+      } finally {
+        // Clear typing indicator
+        await sock.sendPresenceUpdate('paused', sender);
       }
-      
-      // Clear typing indicator
-      await sock.sendPresenceUpdate('paused', sender);
     }
   } catch (error) {
     logger.error("Error processing message:", error);
@@ -210,6 +252,87 @@ async function processIncomingMessage(msg) {
     } catch (sendError) {
       logger.error("Error sending error notification:", sendError);
     }
+  }
+}
+
+// New function to handle command mode (default mode)
+async function handleCommandMode(text, sender, sock) {
+  await sock.sendMessage(sender, { text: `Processing your command: "${text}"...` });
+  
+  // Use the command service to process the text
+  const commandService = require('./commandService');
+  const result = await commandService.processTextCommand(text);
+  
+  // Send back the command and output
+  await sock.sendMessage(sender, { 
+    text: `✅ Command executed:\n\n${result.command}\n\nOutput: ${
+      result.output.length > 500 ? result.output.substring(0, 500) + '...' : result.output
+    }`
+  });
+  
+  // Send screenshot back to WhatsApp
+  await sock.sendMessage(sender, {
+    image: result.screenshot,
+    caption: `Screenshot after executing: ${result.command}`
+  });
+  
+  // Add to conversation history
+  conversationHistory[sender].push({ 
+    role: "user", 
+    content: text 
+  });
+  conversationHistory[sender].push({ 
+    role: "assistant", 
+    content: `Executed command: ${result.command}` 
+  });
+}
+
+// Add new function for AI chat mode
+async function handleAIChatMode(text, sender, sock, mediaData) {
+  // Add user message to conversation history
+  conversationHistory[sender].push({ role: "user", content: text });
+  
+  // Keep only last 10 messages for context
+  if (conversationHistory[sender].length > 10) {
+    conversationHistory[sender] = conversationHistory[sender].slice(-10);
+  }
+  
+  // Prepare context for AI
+  const context = {
+    currentDirectory: "/whatsapp/chat",
+    terminalContext: "WhatsApp Bot Environment",
+    recentCommands: conversationHistory[sender]
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join('\n'),
+    screenshot: mediaData
+  };
+  
+  // Send a "thinking" message for better UX
+  if (text.length > 50) {
+    await sock.sendMessage(sender, { text: "Thinking..." });
+  }
+  
+  // Random delay to simulate thinking (1-3 seconds)
+  const thinkingTime = 1000 + Math.random() * 2000;
+  await new Promise(resolve => setTimeout(resolve, thinkingTime));
+  
+  // Get AI response
+  const aiResponse = await aiService.queryGeminiAI(text, context);
+  
+  // Add AI response to conversation history
+  conversationHistory[sender].push({ role: "assistant", content: aiResponse });
+  
+  // Send the AI response
+  await sock.sendMessage(sender, { text: aiResponse });
+  
+  // Emit message to frontend via socket.io
+  if (io) {
+    io.emit('whatsapp-message', {
+      sender,
+      message: text,
+      response: aiResponse,
+      timestamp: new Date()
+    });
   }
 }
 
@@ -298,7 +421,8 @@ async function sendMessage(number, message) {
 
 // Get the current QR code
 function getQRCode() {
-  return qrCode;
+  logger.info(`Getting QR code, current value: ${qrCode ? 'exists' : 'null'}`);
+  return qrCode; // Return directly, not wrapped in an object
 }
 
 // Get connection status
@@ -407,5 +531,6 @@ module.exports = {
   sendMessage,
   getQRCode,
   getStatus,
-  initializeSocketIO
+  initializeSocketIO,
+  logout // Export the new logout function
 };

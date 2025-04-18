@@ -28,6 +28,7 @@ backend/config/config.prod.js
 backend/logs/
 backend/tmp/
 backend/screenshots/
+backend/auth_info_baileys/
 **/tmp/screenshots/
 
 # Screenshots temporary files

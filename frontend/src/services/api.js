@@ -6,7 +6,8 @@ const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: 10000 // 10 second timeout
 });
 
 // Add request interceptor for logging
@@ -28,9 +29,33 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error('API Response Error:', error.response?.data || error.message);
+    if (error.code === 'ECONNABORTED') {
+      console.error('API request timed out');
+    } else if (!error.response) {
+      console.error('Network Error: Cannot connect to the backend server');
+    } else {
+      console.error(`API Error ${error.response?.status}: ${error.response?.data?.message || error.message}`);
+    }
     return Promise.reject(error);
   }
 );
+
+// Add a health check function
+api.healthCheck = async () => {
+  try {
+    const response = await api.get('/test');
+    return {
+      isAlive: true,
+      message: response.data.message
+    };
+  } catch (error) {
+    return {
+      isAlive: false,
+      message: error.code === 'ECONNABORTED' 
+        ? 'Connection timeout' 
+        : error.message
+    };
+  }
+};
 
 export default api;

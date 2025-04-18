@@ -6,9 +6,11 @@ const logger = createLogger('bot-controller');
 // Get WhatsApp QR code
 const getQRCode = async (req, res) => {
   try {
+    logger.info('QR code requested from API');
     const qrCode = whatsappService.getQRCode();
     
     if (!qrCode) {
+      logger.info('No QR code available, returning 202');
       return res.status(202).json({
         success: true,
         message: 'QR code not yet available or already logged in',
@@ -16,6 +18,7 @@ const getQRCode = async (req, res) => {
       });
     }
     
+    logger.info('Returning QR code to client');
     return res.status(200).json({
       success: true,
       message: 'QR code retrieved successfully',
@@ -81,8 +84,37 @@ const sendMessage = async (req, res) => {
   }
 };
 
+// Logout and regenerate QR code
+const logout = async (req, res) => {
+  try {
+    logger.info('Logout requested');
+    const result = await whatsappService.logout();
+    
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: 'Logged out successfully, QR code will be regenerated'
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to logout',
+        error: result.error
+      });
+    }
+  } catch (error) {
+    logger.error('Error during logout:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to logout',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getQRCode,
   getStatus,
-  sendMessage
+  sendMessage,
+  logout
 };
