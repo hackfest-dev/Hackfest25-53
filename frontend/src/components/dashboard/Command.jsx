@@ -47,7 +47,7 @@ const ThinkingIndicator = ({ isVisible }) => {
   if (!isVisible) return null;
   
   return (
-    <div className="flex items-center py-1 text-gray-300 font-mono text-sm">
+    <div className="flex items-center py-1 text-gray-300 text-sm">
       <span className="text-green-400 mr-1">$</span>
       <span className="mr-1">thinking</span>
       <span className={`inline-block w-2 h-4 ${blink ? 'bg-gray-400' : 'bg-transparent'}`}></span>
@@ -479,7 +479,21 @@ const AITerminal = () => {
     
     connectWebSocket();
   };
+
+  const handleInputChange = (e) => setInput(e.target.value);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && input.trim() && isConnected && !isProcessing) {
+      sendCommand(input);
+    }
+  };
   
+  const handleSend = () => {
+    if (input.trim() && isConnected && !isProcessing) {
+      sendCommand(input);
+    }
+  };
+
   useEffect(() => {
     connectWebSocket();
     
@@ -577,9 +591,18 @@ const AITerminal = () => {
   const toggleThinking = () => {
     setShowThinking(prev => !prev);
   };
+
+  // Add this to your component
+useEffect(() => {
+  const textarea = document.querySelector('textarea');
+  if (textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  }
+}, [input]);
   
   return (
-    <div className="bg-gray-900 h-screen flex flex-col">
+    <div className="bg-black h-screen flex flex-col">
       <div className="p-6 pb-4 bg-gray-800">
         <h1 className="text-3xl font-bold text-indigo-400 mb-2 flex items-center">
           <FiCpu className="mr-2" /> AI Terminal
@@ -674,40 +697,64 @@ const AITerminal = () => {
         )}
       </div>
       
-      <div className="p-4 bg-gray-800 border-t border-gray-700">
-        <div className="flex rounded-md bg-gray-700 overflow-hidden">
-          <span className="bg-gray-800 px-3 flex items-center text-gray-400">$</span>
-          <input
-            type="text"
-            className="flex-1 bg-transparent border-0 text-gray-200 p-3 focus:outline-none font-mono"
-            placeholder="Type a command or question..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendCommand()}
-            disabled={!isConnected || isProcessing}
-          />
-          <button
-            onClick={sendCommand}
-            disabled={!input.trim() || !isConnected || isProcessing}
-            className={`px-4 text-white flex items-center ${
-              !input.trim() || !isConnected || isProcessing 
-                ? 'bg-gray-600 cursor-not-allowed' 
-                : 'bg-indigo-600 hover:bg-indigo-700'
-            }`}
-          >
-            {isProcessing ? 
-              <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin"></div> : 
-              <FiSend />
-            }
-          </button>
+      <div className="p-4 px-20 border-t border-gray-700">
+  <div className="rounded-2xl bg-[#121212] border border-gray-700/50 overflow-hidden shadow-lg">
+    <textarea
+      className="w-full bg-transparent border-0 text-gray-200 pt-4 px-6 focus:outline-none resize-none min-h-[20px] max-h-[200px] overflow-y-auto"
+      placeholder="Type a command or question..."
+      value={input}
+      onChange={handleInputChange}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (input.trim() && isConnected && !isProcessing) {
+            handleSend();
+          }
+        } else {
+          handleKeyDown(e);
+        }
+      }}
+      disabled={!isConnected || isProcessing}
+    />
+    <div className="flex items-center px-6 py-4">
+      <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+      <div className="flex-1"></div>
+      <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
+        <div className="w-5 h-5 flex items-center justify-center rounded-full border border-white/70">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
         </div>
-        
-        {isProcessing && !isThinking && (
-          <div className="mt-2 text-xs text-indigo-400 animate-pulse">
-            AI is processing your request...
-          </div>
+      </button>
+      <button
+        onClick={handleSend}
+        disabled={!input.trim() || !isConnected || isProcessing}
+        className={`flex items-center justify-center w-8 h-8 rounded-full ${
+          !input.trim() || !isConnected || isProcessing
+            ? "bg-gray-600 cursor-not-allowed"
+            : "bg-white hover:bg-gray-200"
+        }`}
+      >
+        {isProcessing ? (
+          <div className="w-4 h-4 border-t-2 border-gray-800 rounded-full animate-spin"></div>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-black" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
         )}
-      </div>
+      </button>
+    </div>
+  </div>
+  {isProcessing && !isThinking && (
+    <div className="mt-2 text-xs text-indigo-400 animate-pulse">
+      AI is processing your request...
+    </div>
+  )}
+</div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FaChartPie, FaWhatsapp, FaTerminal, FaCamera, FaCog } from 'react-icons/fa';
+import { FaChartPie, FaWhatsapp, FaTerminal, FaCamera, FaCog,FaInfoCircle } from 'react-icons/fa';
 
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
@@ -9,8 +9,8 @@ const Sidebar = ({ isOpen }) => {
     { name: 'Dashboard', icon: <FaChartPie />, path: '/analytics' },
     { name: 'WhatsApp', icon: <FaWhatsapp />, path: '/whatsapp' },
     { name: 'Commands', icon: <FaTerminal />, path: '/commands' },
-    { name: 'Screenshots', icon: <FaCamera />, path: '/screenshots' },
-    { name: 'Settings', icon: <FaCog />, path: '/settings' },
+    // { name: 'Screenshots', icon: <FaCamera />, path: '/screenshots' },
+    { name: 'faqs', icon: <FaInfoCircle />, path: '/faqs' },
   ];
   
   return (

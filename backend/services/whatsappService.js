@@ -31,6 +31,7 @@ async function startBot() {
     
     // Clear any existing QR code
     qrCode = null;
+    isConnected = false;
     
     const authFolder = path.join(__dirname, '..', config.whatsapp.authFolder);
     logger.info(`Using auth folder: ${authFolder}`);
@@ -152,18 +153,35 @@ async function logout() {
     isConnected = false;
     qrCode = null;
     
-    // Notify clients of logout
+    // Notify clients of logout immediately
     if (io) {
+      logger.info('Emitting disconnected status to all clients');
       io.emit('whatsapp-status', { 
-        status: 'disconnected', 
-        message: "Logged out" 
+        status: 'disconnected',
+        connected: false,
+        message: "Logged out manually"
       });
     }
     
     // Restart the bot to generate new QR code
-    sock?.ev?.removeAllListeners(); // Clean up all listeners
+    if (sock) {
+      // Try to properly close any existing connection
+      try {
+        sock.ev?.removeAllListeners(); // Clean up all listeners
+        sock.logout().catch(e => logger.warn('Logout error (expected):', e.message));
+      } catch (err) {
+        logger.warn('Error during socket cleanup:', err.message);
+      }
+    }
+    
     sock = null;
-    await startBot();
+    
+    // Start the bot again to generate a new QR code
+    logger.info('Starting bot to generate new QR code');
+    setTimeout(async () => {
+      await startBot();
+      logger.info('Bot restarted after logout, QR should be generated shortly');
+    }, 1000);
     
     return { success: true, message: 'Logged out successfully' };
   } catch (error) {

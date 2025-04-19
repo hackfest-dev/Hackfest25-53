@@ -10,12 +10,13 @@ router.get('/qr', botController.getQRCode);
 // Get WhatsApp connection status - protected by auth middleware
 router.get('/status', verifyToken, async (req, res) => {
   try {
-    // Here you would normally check the actual status of your WhatsApp bot
-    // For now, we'll just return a success message
+    // Get the actual status from the WhatsApp service
+    const status = whatsappService.getStatus();
+    
     res.status(200).json({
       success: true,
-      status: 'online',
-      message: 'Bot is running'
+      status: status,
+      message: status.connected ? 'Bot is connected' : 'Bot is disconnected'
     });
   } catch (error) {
     console.error('Error checking bot status:', error);
@@ -30,7 +31,7 @@ router.get('/status', verifyToken, async (req, res) => {
 // Send a message to a WhatsApp number
 router.post('/send', botController.sendMessage);
 
-// Logout and regenerate QR code - add extra logging
+// Logout and regenerate QR code - should not be protected by auth to ensure it always works
 router.post('/logout', (req, res) => {
   console.log('Logout route accessed directly');
   return botController.logout(req, res);

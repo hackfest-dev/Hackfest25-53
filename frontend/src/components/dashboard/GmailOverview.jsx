@@ -341,10 +341,9 @@ const GmailOverview = () => {
       border: '0.5px solid #4B5563',
     }}>
       <style>{scrollbarStyles}</style>
-      <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+      <div className="text-gray-300 text-sm font-medium pb-2 px-4 pt-3 bg-[#1C1B23] rounded-t-lg flex justify-between items-center">
         <div className="flex items-center">
-          <FaEnvelope className="text-blue-400 mr-2" />
-          <h2 className="text-white text-lg font-medium">Gmail</h2>
+          <span>GMAIL</span>
           {userEmail && (
             <span className="text-gray-400 text-xs ml-2">({userEmail})</span>
           )}
@@ -387,7 +386,7 @@ const GmailOverview = () => {
         </div>
       )}
       
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 relative overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="w-8 h-8 border-t-2 border-b-2 border-blue-400 rounded-full animate-spin"></div>
@@ -427,10 +426,18 @@ const GmailOverview = () => {
             <p className="text-gray-500 text-sm">No emails found</p>
           </div>
         ) : (
-          <div>
+          <div className="absolute inset-0 overflow-y-auto events-scroll">
             {filteredEmails.map(email => (
               <EmailRow key={email.id} email={email} />
             ))}
+            
+            {/* Fade overlay */}
+            <div 
+              className="sticky bottom-0 left-0 right-0 h-24 pointer-events-none" 
+              style={{
+                background: 'linear-gradient(to bottom, rgba(18, 18, 18, 0), rgba(18, 18, 18, 1) 85%)'
+              }}
+            />
           </div>
         )}
       </div>
