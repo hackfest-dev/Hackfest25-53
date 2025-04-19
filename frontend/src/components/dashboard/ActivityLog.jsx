@@ -1,9 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaChrome, FaFirefox, FaWindows, FaCode, FaRegWindowMaximize } from 'react-icons/fa';
 
-const ActivityLog = ({ data }) => {
-  // Sort activities by timestamp (most recent first) but don't limit to 5
-  const sortedActivities = [...data]
+const ActivityLog = ({ data: initialData }) => {
+  const [activities, setActivities] = useState(initialData || []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchActivityData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/usage_log.json');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch activity data: ${response.status}`);
+      }
+      const data = await response.json();
+      setActivities(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching activity data:', err);
+      setError('Failed to load activity data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch data immediately when component mounts
+    fetchActivityData();
+    
+    // Set up interval to fetch data regularly (every 10 seconds)
+    const intervalId = setInterval(fetchActivityData, 10000);
+    
+    // Clean up interval when component unmounts
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Sort activities by timestamp (most recent first)
+  const sortedActivities = [...activities]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   
   const getAppIcon = (appName) => {
@@ -68,7 +101,10 @@ const ActivityLog = ({ data }) => {
       <div className="text-gray-300 text-sm font-medium pb-2 px-4 pt-3 bg-[#1C1B23] rounded-t-lg">ACTIVITY</div>
       <div className="flex items-center mb-2 px-4 pt-2">
         <div className="text-gray-500 mr-4">Desktop application:</div>
-        <div className="text-gray-400">Ok</div>
+        <div className={`${error ? 'text-red-400' : 'text-gray-400'}`}>
+          {error ? 'Error' : 'Ok'}
+        </div>
+        {loading && <div className="ml-2 text-xs text-gray-500">(refreshing...)</div>}
       </div>
       
       {/* Container with fade effect */}
@@ -79,13 +115,13 @@ const ActivityLog = ({ data }) => {
             {sortedActivities.map((activity, index) => (
               <div 
                 key={index} 
-                className="grid grid-cols-[100px_150px_1fr] items-center"
+                className="grid grid-cols-[100px_100px_1fr] items-center"
               >
                 <div className="text-gray-500">
                   {formatTime(activity.timestamp)}
                 </div>
                 <div className="text-gray-300 whitespace-nowrap overflow-hidden text-overflow-ellipsis" title={activity.app_name}>
-                  {truncateTitle(activity.app_name, 15)}
+                  {truncateTitle(activity.app_name, 10)}
                 </div>
                 <div className="text-gray-500 whitespace-nowrap overflow-hidden text-overflow-ellipsis" title={activity.window_title}>
                   {truncateTitle(activity.window_title)}
@@ -95,7 +131,7 @@ const ActivityLog = ({ data }) => {
             
             {sortedActivities.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                No recent activity data available
+                {loading ? 'Loading activity data...' : 'No recent activity data available'}
               </div>
             )}
           </div>

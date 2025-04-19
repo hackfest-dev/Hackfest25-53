@@ -43,6 +43,9 @@ backend/auth_info_baileys/
 venv/
 __pycache__/
 
+# Whatsapp authentication files
+backend/whatsapp-auth/
+
 # Screenshots temporary files
 **/screenshot_*.png
 **/browser_screenshot_*.png

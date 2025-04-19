@@ -7,7 +7,7 @@ const path = require('path');
 // Configuration
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const CALENDAR_ID = 'primary'; // Use 'primary' for the primary calendar
-const GROQ_API_KEY = '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';
+const GROQ_API_KEY = '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';
 
 // Hardcoded Google OAuth credentials
 const GOOGLE_CLIENT_ID = '705005017645-23mgk5cgputruevubrdab7g3qbvg9mdl.apps.googleusercontent.com';

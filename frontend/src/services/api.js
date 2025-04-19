@@ -5,13 +5,13 @@ import { jwtDecode } from 'jwt-decode';
  * API service for interacting with the backend
  */
 
-const API_BASE_URL = 'http://localhost:3000/api';
+// Consistent API URL configuration
 const API_URL = process.env.NODE_ENV === 'production' 
   ? '/api' 
-  : 'http://localhost:5000/api';
+  : 'http://localhost:3000/api'; // Fix port to match backend (3000 not 5000)
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -129,6 +129,34 @@ const getTrackingStatus = async () => {
   }
 };
 
+/**
+ * Logout from WhatsApp
+ * @returns {Promise<Object>} Response with logout status
+ */
+const logoutWhatsApp = async () => {
+  try {
+    const response = await api.post('/bot/logout');
+    return response.data;
+  } catch (error) {
+    console.error('API error during WhatsApp logout:', error);
+    throw error;
+  }
+};
+
+/**
+ * Health check for API connectivity
+ * @returns {Promise<Object>} Response with health status
+ */
+const healthCheck = async () => {
+  try {
+    const response = await api.get('/test');
+    return { isAlive: true, message: response.data.message };
+  } catch (error) {
+    console.error('API health check failed:', error);
+    return { isAlive: false, message: error.message };
+  }
+};
+
 export default {
   get: (url, config = {}) => api.get(url, config),
   post: (url, data, config = {}) => api.post(url, data, config),
@@ -140,4 +168,6 @@ export default {
   getDecodedToken,
   toggleTracking,
   getTrackingStatus,
+  logoutWhatsApp,  // Add this new method
+  healthCheck,     // Add this new method
 };

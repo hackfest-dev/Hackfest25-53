@@ -32,21 +32,52 @@ googleProvider.setCustomParameters({
 // Authentication functions
 const signInWithGoogle = async () => {
   try {
+    // Force the consent prompt to ensure we get fresh tokens with all scopes
+    googleProvider.setCustomParameters({
+      prompt: 'consent',
+      access_type: 'offline' // Request a refresh token too
+    });
+    
     const result = await signInWithPopup(auth, googleProvider);
-    // This gives you access to the Google Access Token which we'll use for Calendar
+    // This gives you access to the Google Access Token which we'll use for Calendar and Gmail
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential.accessToken;
     const user = result.user;
     
-    // Store the user's Google access token in localStorage for use with Calendar API
+    // Store the user's Google access token in localStorage
     localStorage.setItem('googleAccessToken', token);
     
-    // Also store credential info
+    // Store complete token data including refresh token if available
     const tokenData = {
       access_token: token,
-      id_token: credential.idToken
+      id_token: credential.idToken,
+      refresh_token: credential.refreshToken,
+      expires_at: Date.now() + 3600 * 1000, // Approximate expiration (1 hour)
+      scopes: googleProvider.scopes
     };
     localStorage.setItem('googleTokenData', JSON.stringify(tokenData));
+    
+    // Immediately after login, set Gmail tokens on the server
+    try {
+      const response = await fetch('/api/gmail/set-gmail-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.accessToken}`
+        },
+        body: JSON.stringify({
+          googleToken: tokenData,
+          userInfo: {
+            sub: user.uid,
+            email: user.email
+          }
+        })
+      });
+      console.log('Gmail token setup result:', await response.json());
+    } catch (gmailError) {
+      console.error('Failed to set Gmail tokens:', gmailError);
+      // Continue - we don't want to fail login if Gmail token setup fails
+    }
     
     return { user, token };
   } catch (error) {
@@ -55,7 +86,7 @@ const signInWithGoogle = async () => {
   }
 };
 
-// Get the Google token for Calendar API
+// Get the Google token for API use
 const getGoogleToken = () => {
   try {
     const tokenData = localStorage.getItem('googleTokenData');

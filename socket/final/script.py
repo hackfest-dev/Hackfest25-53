@@ -9,6 +9,11 @@ from langchain.callbacks.base import BaseCallbackHandler
 from dotenv import load_dotenv
 import os
 import websockets
+import warnings
+import platform
+
+# Suppress LangChain deprecation warnings (optional)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="langchain")
 
 # --- Dual-Capture Callback Handler ---
 class StreamingCaptureHandler(BaseCallbackHandler):
@@ -57,10 +62,20 @@ class CaptureShellTool(BaseTool):
     description: str = "Executes shell commands and captures output"
     
     async def _arun(self, command: str, run_manager=None):
+        # Detect OS and adjust command if needed
+        system = platform.system()
+        
+        if system == "Windows":
+            # For Windows, ensure cmd.exe is used
+            # Wrap the command with cmd /c to execute and exit
+            if not command.startswith("cmd /c") and not command.startswith("powershell"):
+                command = f"cmd /c {command}"
+        
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            shell=True,  # Explicitly set shell=True for Windows compatibility
         )
         
         output_lines = []
@@ -72,28 +87,55 @@ class CaptureShellTool(BaseTool):
             output_lines.append(decoded)
             
             # Stream line to callback handler if available
-            # Instead of using on_tool_output which doesn't exist
             if run_manager:
                 # Just log the output but don't try to call non-existent method
                 # We'll rely on the regular tool_end callback instead
                 pass
                 
         await process.wait()
+        
+        # Improve error handling for common Windows issues
+        result = "\n".join(output_lines)
+        if process.returncode != 0 and not result:
+            if system == "Windows":
+                result = f"Command failed with exit code {process.returncode}. Make sure the command is valid on Windows."
+            else:
+                result = f"Command failed with exit code {process.returncode}."
+        
         return json.dumps({
             "command": command,
-            "result": "\n".join(output_lines),
+            "result": result,
             "status": "success" if process.returncode == 0 else "error"
         })
     
     def _run(self, command: str):
         # Synchronous fallback
         import subprocess
+        
+        # Detect OS and adjust command if needed
+        system = platform.system()
+        
+        if system == "Windows":
+            # For Windows, ensure cmd.exe is used
+            if not command.startswith("cmd /c") and not command.startswith("powershell"):
+                command = f"cmd /c {command}"
+        
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True
+            command, 
+            shell=True,  # Explicitly set shell=True for Windows compatibility
+            capture_output=True, 
+            text=True
         )
+        
+        # Improve error handling for empty output
+        output = result.stdout if result.stdout else (
+            f"Command failed with exit code {result.returncode}. No output was returned." 
+            if result.returncode != 0 else ""
+        )
+        
         return json.dumps({
             "command": command,
-            "result": result.stdout,
+            "result": output,
             "status": "success" if result.returncode == 0 else "error"
         })
 
@@ -127,7 +169,11 @@ async def agent_socket(websocket):
             
             # Use context manager to capture all stdout during agent run
             with redirect_stdout(stdout_buffer):
-                result = await agent.arun(message)
+                # Replace deprecated arun with ainvoke
+                result = await agent.ainvoke({"input": message})
+                # Extract the result from the return value
+                if isinstance(result, dict) and "output" in result:
+                    result = result["output"]
             
             # Get all captured stdout
             verbose_output = stdout_buffer.getvalue()

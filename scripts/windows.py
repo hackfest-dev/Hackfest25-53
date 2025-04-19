@@ -332,7 +332,7 @@ class GroqLLM:
             raise RuntimeError(f"Failed to parse Groq response as JSON: {content}\nError: {e}")
 
 # Example usage:
-groq_llm = GroqLLM(api_key='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')
+groq_llm = GroqLLM(api_key='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')
 # instructions = groq_llm.parse_natural_language("open vscode and my browser to the left and right and terminal to the top left")
 instructions = groq_llm.parse_natural_language("Open chrome and firefox and terminal in best possible layout")
 print(instructions)

@@ -167,15 +167,8 @@ function WhatsappControl({ socket }) {
       setLoading(true);
       console.log('Logging out WhatsApp session...');
       
-      const fetchResponse = await fetch(`${api.defaults.baseURL}/bot/logout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const responseData = await fetchResponse.json();
-      console.log('Fetch response:', responseData);
+      const responseData = await api.logoutWhatsApp();
+      console.log('Logout response:', responseData);
       
       setQrCode(null);
       setStatus({ connected: false });

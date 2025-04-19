@@ -45,9 +45,35 @@ const EmailRow = ({ email }) => {
     }
     return from;
   };
+  const scrollbarStyles = `
+  .events-scroll::-webkit-scrollbar {
+    width: 4px;
+    background: transparent;
+  }
   
+  .events-scroll::-webkit-scrollbar-thumb {
+    background: rgba(76, 61, 139, 0.5);
+    border-radius: 4px;
+  }
+  
+  .events-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(94, 78, 153, 0.7);
+  }
+  
+  .events-scroll::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+  }
+  
+  .events-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(76, 61, 139, 0.5) transparent;
+  }
+`;
+
   return (
     <div className={`flex items-center border-b border-gray-700 p-2 hover:bg-gray-800 transition-colors ${email.priority === 'high' ? 'bg-gray-800' : ''}`}>
+      <style>{scrollbarStyles}</style>
       <div className="flex-shrink-0 mr-3">
         <div className={`w-2 h-2 rounded-full ${email.priority === 'high' ? 'bg-red-500' : email.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-500'}`}></div>
       </div>
@@ -90,22 +116,41 @@ const GmailOverview = () => {
   const [isAuthError, setIsAuthError] = useState(false);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   
   useEffect(() => {
     const checkGoogleAuth = async () => {
       try {
+        setLoading(true);
         const userInfo = await gmailService.checkGoogleAuth();
         console.log("Gmail auth check result:", userInfo);
-        setIsGoogleUser(!!userInfo);
-        setAuthChecked(true);
         
-        if (userInfo) {
-          fetchEmails();
+        // Check if the user has Google auth but may need Gmail permissions
+        if (userInfo && userInfo.isGoogleAuth) {
+          setIsGoogleUser(true);
+          
+          // If they have Gmail tokens, we're good to fetch emails
+          if (userInfo.hasGmailTokens) {
+            fetchEmails();
+          } else {
+            // They need to grant Gmail permissions - stop loading and show auth prompt
+            setIsAuthError(true);
+            setError('Gmail access required. Please click the button below to grant access to your Gmail.');
+            setLoading(false); // Important: Stop loading when we know auth is needed
+          }
+        } else {
+          setIsGoogleUser(false);
+          setIsAuthError(userInfo === null);
+          setLoading(false); // Stop loading if no auth
         }
+        
+        setAuthChecked(true);
       } catch (error) {
         console.error('Error checking Google auth:', error);
         setIsGoogleUser(false);
         setAuthChecked(true);
+        setLoading(false); // Always ensure loading stops on error
+        setError('Failed to check authentication status');
       }
     };
     
@@ -114,24 +159,45 @@ const GmailOverview = () => {
   
   const handleGoogleAuth = async () => {
     try {
+      setLoading(true);
+      
       if (isGoogleUser) {
-        await gmailService.refreshGoogleToken();
-        fetchEmails();
-        return;
+        try {
+          // Try to refresh the token first
+          await gmailService.forceTokenRefresh(); // Use the new forceTokenRefresh function
+          fetchEmails();
+          return;
+        } catch (refreshError) {
+          console.error('Error refreshing token:', refreshError);
+          // If refresh fails with a needsGmailPermissions flag, we need to get Gmail permissions
+          if (refreshError.needsGmailPermissions) {
+            console.log('User needs to grant Gmail permissions');
+          } else {
+            // For other errors, just continue to the auth URL flow
+            console.log('Token refresh failed, continuing to auth URL flow');
+          }
+        }
       }
       
-      // Get auth URL first
+      // Get auth URL and open in new window
       const authUrl = await gmailService.getAuthUrl();
       
       if (!authUrl) {
         setError('Failed to get authorization URL');
+        setLoading(false);
         return;
       }
       
-      // Then open the window with the auth URL
+      // Open the auth window
       const authWindow = window.open(authUrl, '_blank', 'width=500,height=600');
       
-      setLoading(true);
+      // Ensure the window opened successfully
+      if (!authWindow || authWindow.closed || typeof authWindow.closed === 'undefined') {
+        setError('Popup window was blocked. Please allow popups for this site.');
+        setLoading(false);
+        return;
+      }
+      
       setError(null);
       setIsAuthError(false);
       
@@ -140,13 +206,35 @@ const GmailOverview = () => {
         if (authWindow && authWindow.closed) {
           clearInterval(checkAuthInterval);
           setTimeout(async () => {
-            // Check if the authentication was successful
-            const userInfo = await gmailService.checkGoogleAuth();
-            if (userInfo) {
-              setIsGoogleUser(true);
-              fetchEmails();
-            } else {
-              setError('Gmail authorization failed or was cancelled');
+            try {
+              // Check if the authentication was successful
+              const userInfo = await gmailService.checkGoogleAuth();
+              if (userInfo && userInfo.hasGmailTokens) {
+                setIsGoogleUser(true);
+                setIsAuthError(false);
+                fetchEmails();
+              } else {
+                // Try one more time to set up Gmail tokens
+                try {
+                  await gmailService.setupGmailTokens();
+                  const retryUserInfo = await gmailService.checkGoogleAuth();
+                  if (retryUserInfo && retryUserInfo.hasGmailTokens) {
+                    setIsGoogleUser(true);
+                    setIsAuthError(false);
+                    fetchEmails();
+                    return;
+                  }
+                } catch (setupError) {
+                  console.error('Final Gmail token setup attempt failed:', setupError);
+                }
+                
+                setError('Gmail authorization failed or was cancelled. Please try again.');
+                setIsAuthError(true);
+                setLoading(false);
+              }
+            } catch (authCheckError) {
+              console.error('Error checking auth status after popup:', authCheckError);
+              setError('Error verifying Gmail authorization. Please try again.');
               setIsAuthError(true);
               setLoading(false);
             }
@@ -155,7 +243,8 @@ const GmailOverview = () => {
       }, 1000);
     } catch (error) {
       console.error('Error initiating Google auth:', error);
-      setError('Failed to initiate Google authorization');
+      setError(`Failed to initiate Google authorization: ${error.message}`);
+      setLoading(false);
     }
   };
   
@@ -165,44 +254,51 @@ const GmailOverview = () => {
       setError(null);
       setIsAuthError(false);
       
-      const response = await gmailService.getEmails(100);
+      // Add a timeout to prevent hanging requests
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 15000)
+      );
+      
+      const emailsPromise = gmailService.getEmails(30);
+      
+      // Race between the actual request and the timeout
+      const response = await Promise.race([emailsPromise, timeoutPromise]);
       
       if (response.success) {
-        setEmails(response.emails);
+        setEmails(response.emails || []);
+        // Set the user's email address if available
+        if (response.userEmail) {
+          setUserEmail(response.userEmail);
+        }
         setIsGoogleUser(true);
+        setIsAuthError(false);
       } else {
         setError('Failed to fetch emails');
       }
     } catch (error) {
       console.error('Error fetching emails:', error);
       
-      if (error.message && (
-          error.message.includes('authorization required') || 
-          error.message.includes('auth') || 
-          error.message.includes('401') ||
-          error.message.includes('403'))) {
+      if (error.message === 'Request timeout') {
+        setError('Request timed out. Please try again.');
+      } else if (error.needsAuthorization) {
         setIsAuthError(true);
         
-        if (isGoogleUser) {
-          setError('Gmail access required. Please click the button below to grant access to your Gmail.');
+        if (error.needsGmailPermissions) {
+          setError('Gmail access required. Please click the button below to grant access to your Gmail account.');
+          setIsGoogleUser(true); // They have Google auth but need Gmail permissions
         } else {
           setError('Gmail authorization required. Please connect your Gmail account.');
+          setIsGoogleUser(false);
         }
-        
-        setIsGoogleUser(false);
+      } else if (error.serverError) {
+        setError(`Server error: ${error.errorMessage || 'Unknown error'}`);
       } else {
-        setError(error.message);
+        setError(error.message || 'Failed to fetch emails');
       }
     } finally {
-      setLoading(false);
+      setLoading(false); // Always ensure loading stops
     }
   };
-  
-  useEffect(() => {
-    if (authChecked && !isGoogleUser) {
-      fetchEmails();
-    }
-  }, [authChecked, isGoogleUser]);
   
   const filteredEmails = priorityFilter === 'all' 
     ? emails 
@@ -212,13 +308,46 @@ const GmailOverview = () => {
     counts[email.priority] = (counts[email.priority] || 0) + 1;
     return counts;
   }, {});
+
+  const scrollbarStyles = `
+  .events-scroll::-webkit-scrollbar {
+    width: 4px;
+    background: transparent;
+  }
+  
+  .events-scroll::-webkit-scrollbar-thumb {
+    background: rgba(76, 61, 139, 0.5);
+    border-radius: 4px;
+  }
+  
+  .events-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(94, 78, 153, 0.7);
+  }
+  
+  .events-scroll::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+  }
+  
+  .events-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(76, 61, 139, 0.5) transparent;
+  }
+`;
   
   return (
-    <div className="bg-[#121212] rounded-lg shadow-lg overflow-hidden h-full flex flex-col">
+    <div className="bg-[#121212] rounded-lg shadow-lg overflow-hidden h-full flex flex-col"
+    style={{
+      border: '0.5px solid #4B5563',
+    }}>
+      <style>{scrollbarStyles}</style>
       <div className="p-4 border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center">
           <FaEnvelope className="text-blue-400 mr-2" />
           <h2 className="text-white text-lg font-medium">Gmail</h2>
+          {userEmail && (
+            <span className="text-gray-400 text-xs ml-2">({userEmail})</span>
+          )}
         </div>
         <button 
           onClick={fetchEmails} 
