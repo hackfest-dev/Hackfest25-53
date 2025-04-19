@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Terminal Agent</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #dcdcdc;
+            --token-color: #569cd6;
+            --command-color: #ce9178;
+            --output-color: #b5cea8;
+            --verbose-color: #9cdcfe;
+            --result-color: #4ec9b0;
+            --error-color: #f44747;
+            --system-color: #6a9955;
+            --thinking-color: #8a8a8a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        #terminal-container {
+            flex: 1;
+            background-color: var(--bg-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #terminal {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            color: var(--text-color);
+            font-size: 14px;
+            line-height: 1.5;
+            min-height: 500px;
+            max-height: 70vh;
+        }
+
+        #input-area {
+            display: flex;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-top: 1px solid #333;
+        }
+
+        #prompt {
+            color: var(--command-color);
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        #command-input {
+            flex: 1;
+            background-color: transparent;
+            border: none;
+            color: var(--text-color);
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+
+        #send-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0 15px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: background-color 0.2s;
+        }
+
+        #send-button:hover {
+            background-color: #3e8e41;
+        }
+
+        /* Message type styles */
+        .token {
+            color: var(--token-color);
+            display: inline;
+        }
+
+        .command {
+            color: var(--command-color);
+            font-weight: bold;
+            margin-top: 10px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .output {
+            color: var(--output-color);
+            white-space: pre-wrap;
+            margin-left: 15px;
+        }
+
+        .verbose {
+            color: var(--verbose-color);
+            margin-left: 10px;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
+
+        .thinking {
+            color: var(--thinking-color);
+            font-style: italic;
+        }
+
+        .result {
+            color: var(--result-color);
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 5px;
+            border-left: 3px solid var(--result-color);
+        }
+
+        .error {
+            color: var(--error-color);
+            margin-top: 10px;
+            padding: 5px;
+            border-left: 3px solid var(--error-color);
+        }
+
+        .system {
+            color: var(--system-color);
+            text-align: center;
+            margin: 10px 0;
+            font-style: italic;
+        }
+
+        .reasoning-container {
+            margin: 10px 0;
+            padding: 8px;
+            background-color: rgba(86, 156, 214, 0.1);
+            border-radius: 4px;
+        }
+
+        .reasoning-container p {
+            margin: 0;
+            padding: 0;
+        }
+
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>AI Terminal Agent</h1>
+        <p class="description">Interact with an AI agent that can execute commands and answer questions</p>
+    </header>
+
+    <div id="terminal-container">
+        <div id="terminal"></div>
+        <div id="input-area">
+            <span id="prompt">$</span>
+            <input type="text" id="command-input" placeholder="Type a command or question...">
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+
+    <footer>
+        <p>Powered by LangChain and GPT-4</p>
+    </footer>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const commandInput = document.getElementById('command-input');
+        const sendButton = document.getElementById('send-button');
+        
+        // Token collection for reasoning display
+        let tokenBuffer = '';
+        let isCollectingTokens = false;
+        let tokenContainer = null;
+        
+        // Connect to WebSocket server
+        const socket = new WebSocket('ws://localhost:8765');
+        
+        socket.onopen = function() {
+            appendToTerminal('Connected to AI Terminal Agent', 'system');
+            appendToTerminal('Ready for your commands!', 'system');
+        };
+        
+        socket.onclose = function() {
+            appendToTerminal('Connection to server closed', 'error');
+        };
+        
+        socket.onerror = function() {
+            appendToTerminal('WebSocket error occurred', 'error');
+        };
+        
+        socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                switch(data.type) {
+                    case 'token':
+                        handleToken(data.content);
+                        break;
+                    case 'thinking':
+                    case 'reasoning':
+                        startTokenCollection();
+                        appendToContainer(data.content);
+                        break;
+                    case 'command':
+                        endTokenCollection(); // End any token collection when command starts
+                        appendToTerminal(data.content, 'command');
+                        break;
+                    case 'output':
+                        try {
+                            // Try to parse as JSON for structured command output
+                            const outputData = JSON.parse(data.content);
+                            const statusClass = outputData.status === 'success' ? 'output' : 'error';
+                            appendToTerminal(outputData.result, statusClass);
+                        } catch (e) {
+                            // If not JSON, display as regular output
+                            appendToTerminal(data.content, 'output');
+                        }
+                        break;
+                    case 'verbose':
+                        appendToTerminal(data.content, 'verbose');
+                        break;
+                    case 'action':
+                        appendToTerminal(data.content, 'action');
+                        break;
+                    case 'result':
+                        endTokenCollection(); // End any token collection when result arrives
+                        appendToTerminal(data.content, 'result');
+                        break;
+                    case 'error':
+                        endTokenCollection(); // End any token collection on error
+                        appendToTerminal(`Error: ${data.content}`, 'error');
+                        break;
+                    case 'system':
+                        appendToTerminal(data.content, 'system');
+                        break;
+                    default:
+                        appendToTerminal(data.content, data.type || 'output');
+                }
+            } catch (e) {
+                console.error('Error parsing message:', e);
+                appendToTerminal(event.data, 'output');
+            }
+            
+            // Auto-scroll to the bottom
+            terminal.scrollTop = terminal.scrollHeight;
+        };
+        
+        function startTokenCollection() {
+            if (!isCollectingTokens) {
+                isCollectingTokens = true;
+                tokenBuffer = '';
+                tokenContainer = document.createElement('div');
+                tokenContainer.className = 'reasoning-container';
+                const paragraph = document.createElement('p');
+                tokenContainer.appendChild(paragraph);
+                terminal.appendChild(tokenContainer);
+            }
+        }
+        
+        function appendToContainer(content) {
+            if (tokenContainer && tokenContainer.querySelector('p')) {
+                tokenContainer.querySelector('p').textContent += content;
+            }
+        }
+        
+        function handleToken(token) {
+            if (!isCollectingTokens) {
+                startTokenCollection();
+            }
+            tokenBuffer += token;
+            appendToContainer(token);
+        }
+        
+        function endTokenCollection() {
+            isCollectingTokens = false;
+            tokenBuffer = '';
+            tokenContainer = null;
+        }
+        
+        function appendToTerminal(text, type = 'output') {
+            const element = document.createElement('div');
+            element.className = type;
+            
+            // Format based on type
+            if (type === 'command') {
+                element.textContent = `$ ${text}`;
+            } else if (type === 'error') {
+                element.innerHTML = `<span style="color:red">⚠️</span> ${text}`;
+            } else if (type === 'result') {
+                element.innerHTML = `<span style="color:#4ec9b0">✓</span> ${text}`;
+            } else {
+                element.textContent = text;
+            }
+            
+            terminal.appendChild(element);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        // Send command function
+        function sendCommand() {
+            const command = commandInput.value.trim();
+            if (command && socket.readyState === WebSocket.OPEN) {
+                appendToTerminal(command, 'command');
+                socket.send(command);
+                commandInput.value = '';
+                
+                // Clear any previous token collection
+                endTokenCollection();
+            }
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendCommand);
+        
+        commandInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendCommand();
+            }
+        });
+        
+        // Set focus to input on page load
+        window.onload = function() {
+            commandInput.focus();
+        };
+    </script>
+</body>
+</html>
