@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Chat Streaming</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #messages {
+      border: 1px solid #ccc;
+      padding: 10px;
+      height: 300px;
+      overflow-y: scroll;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      background: #f9f9f9;
+    }
+    #loading {
+      display: none;
+      color: green;
+      margin-top: 10px;
+    }
+    label {
+      display: inline-block;
+      width: 60px;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Chat Streaming</h1>
+  <div>
+    <label>User ID:</label>
+    <input type="text" id="userId" value="default_user">
+  </div>
+  <div style="margin-top: 10px;">
+    <label>Task:</label>
+    <input type="text" id="taskInput" placeholder="Type your query here..." size="50">
+    <button id="btnSend">Send</button>
+  </div>
+  <div id="loading">Processing...</div>
+  <div id="messages"></div>
+  
+  <script>
+    document.getElementById("btnSend").addEventListener("click", async function () {
+      const task = document.getElementById("taskInput").value;
+      const userId = document.getElementById("userId").value;
+      const messagesDiv = document.getElementById("messages");
+      const loadingIndicator = document.getElementById("loading");
+  
+      if (!task) return;
+  
+      // Clear previous messages and show loading indicator
+      messagesDiv.textContent = "";
+      loadingIndicator.style.display = "block";
+      
+      try {
+        const response = await fetch("http://localhost:8000/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task: task, user_id: userId })
+        });
+  
+        // Obtain a reader for the response's body stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let done = false;
+  
+        // Read and decode each chunk as it arrives
+        while (!done) {
+          const { value, done: doneReading } = await reader.read();
+          done = doneReading;
+          const chunkValue = decoder.decode(value, { stream: !done });
+          messagesDiv.textContent += chunkValue;
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+      } catch (err) {
+        messagesDiv.textContent = "Error: " + err;
+      } finally {
+        loadingIndicator.style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>
