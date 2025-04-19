@@ -19,7 +19,7 @@ openai_client = OpenAI()
 config = {
     "vector_store": {
         "provider": "chroma",
-        "config": {
+        "config": { 
             "collection_name": "ai_friend_chatbot_memory",
             "path": "./chroma_db",  # Directory for persistent storage
         },
