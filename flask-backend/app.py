@@ -12,7 +12,7 @@ from tools import execute_command, generate_command, open_youtube_video
 
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins=[])
 WATCHED_FILE = os.path.abspath(
     os.path.join(os.path.dirname(__file__),
                  "../scripts/logs\categorized_log.json")

@@ -61,22 +61,66 @@ botService.initializeSocketIO(io);
 // Register API routes
 logger.info('Registering API routes...');
 app.use('/api/auth', authRoutes); // Add auth routes
+
+// Add the test-ai-routes endpoint BEFORE registering the router
+app.get('/api/test-ai-routes', (req, res) => {
+  logger.info('AI routes test endpoint accessed');
+  const routes = [];
+  
+  // Check if aiRoutes has routes registered
+  aiRoutes.stack.forEach((route) => {
+    if (route.route) {
+      const path = route.route.path;
+      const methods = Object.keys(route.route.methods).map(m => m.toUpperCase());
+      routes.push({ path, methods });
+    }
+  });
+  
+  res.json({ 
+    success: true, 
+    message: 'AI routes test endpoint', 
+    routes 
+  });
+});
+
+// Make sure to register routes in the correct order
 app.use('/api/bot', authController.verifyToken, botRoutes); // Protected by auth
 app.use('/api/screenshot', authController.verifyToken, screenshotRoutes); // Protected by auth
 app.use('/api/command', authController.verifyToken, commandRoutes); // Protected by auth
 app.use('/api/calendar', calendarRoutes); // Calendar has its own auth handling
-app.use('/api/ai', aiRoutes); // Add AI routes registration
 
-// Debug: Log registered routes
+// Make this line more visible for debugging
+logger.info('🔹 Registering AI routes at /api/ai');
+app.use('/api/ai', aiRoutes); // AI routes
+
+// Test endpoint to check if the AI routes are accessible
+app.get('/api/ai-routes-test', (req, res) => {
+  logger.info('Simple AI routes test endpoint accessed');
+  res.json({ 
+    success: true, 
+    message: 'If you can see this, the AI routes endpoint is registered correctly' 
+  });
+});
+
+// Debug: Log registered routes in more detail
+logger.info('Detailed route registration information:');
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {
+    // Routes registered directly on the app
     const methods = Object.keys(middleware.route.methods).join(',').toUpperCase();
     logger.info(`Route: ${methods} ${middleware.route.path}`);
   } else if (middleware.name === 'router') {
+    // Routes registered via a router
     middleware.handle.stack.forEach((handler) => {
       if (handler.route) {
         const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
-        logger.info(`Router: ${methods} ${handler.route.path}`);
+        const baseUrl = middleware.regexp.toString()
+          .replace(/^\/?\\?^\\\//, '')
+          .replace(/\\\/\?\(\?\:\\\.\(\*\)\)\?\$/, '')
+          .replace(/\\\//g, '/');
+        
+        const cleanBaseUrl = baseUrl.replace(/\\/g, '');
+        logger.info(`Router [${cleanBaseUrl}]: ${methods} ${handler.route.path}`);
       }
     });
   }
