@@ -6,6 +6,7 @@ import TotalTimeSpent from '../../components/dashboard/TotalTimeSpent';
 import ActivityLog from '../../components/dashboard/ActivityLog';
 import CategoryBreakdown from '../../components/dashboard/CategoryBreakdown';
 import UpcomingEvents from '../../components/dashboard/UpcomingEvents';
+import DailyTip from '../../components/dashboard/DailyTip';
 import api from '../../services/api';
 
 // Create a context to hold the activity data without causing re-renders
@@ -345,6 +346,11 @@ const DashboardContent = React.memo(() => {
               onRefresh={refreshData}
               nextRefresh={nextRefreshDisplay}
             />
+            
+            {/* Daily Tip component */}
+            <div className="mt-4">
+              <DailyTip />
+            </div>
             
             <div style={{ 
               display: 'flex', 
