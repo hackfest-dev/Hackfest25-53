@@ -71,9 +71,12 @@ class CaptureShellTool(BaseTool):
             decoded = line.decode().strip()
             output_lines.append(decoded)
             
-            # Stream line to callback manager if available
+            # Stream line to callback handler if available
+            # Instead of using on_tool_output which doesn't exist
             if run_manager:
-                await run_manager.on_tool_output(decoded)
+                # Just log the output but don't try to call non-existent method
+                # We'll rely on the regular tool_end callback instead
+                pass
                 
         await process.wait()
         return json.dumps({
