@@ -8,6 +8,7 @@ import CategoryBreakdown from '../../components/dashboard/CategoryBreakdown';
 import UpcomingEvents from '../../components/dashboard/UpcomingEvents';
 import DailyTip from '../../components/dashboard/DailyTip';
 import GmailOverview from '../../components/dashboard/GmailOverview';
+import TimeTrackingCard from '../../components/dashboard/TimeTrackingCard';
 import api from '../../services/api';
 
 // Create a context to hold the activity data without causing re-renders
@@ -341,43 +342,30 @@ const DashboardContent = React.memo(() => {
         
         <main className="flex-1 overflow-y-auto p-4">
           <div className="space-y-6">
-            {/* <StatusDisplay 
-              lastUpdated={lastUpdated} 
-              isRefreshing={isRefreshing}
-              onRefresh={refreshData}
-              nextRefresh={nextRefreshDisplay}
-            /> */}
-            
             {/* Daily Tip component */}
             <div className="mt-4">
               <DailyTip />
             </div>
             
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'row',
-              gap: '1.5rem',
-              width: '100%'
-            }}>
-              <div style={{ width: '70%' }}>
-                <TimelineBreakdownWrapper />
+            {/* First row: TimeTrackingCard and CategoryBreakdown */}
+            <div className="flex flex-row gap-6">
+              <div className="w-2/3 h-[350px]">
+                <TimeTrackingCardWrapper isTracking={isTracking} onToggleTracking={toggleTracking} />
               </div>
-              <div style={{ width: '30%' }}>
-                <TotalTimeSpentWrapper isTracking={isTracking} onToggleTracking={toggleTracking} />
+              <div className="w-1/3 h-[350px]">
+                <CategoryBreakdownWrapper />
               </div>
             </div>
             
-            <div className="flex flex-row gap-6 mt-6">
-              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+            {/* Second row: remaining components */}
+            <div className="flex flex-row gap-6">
+              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <ActivityLogWrapper />
               </div>
-              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
-                <CategoryBreakdownWrapper />
-              </div>
-              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <UpcomingEvents />
               </div>
-              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <GmailOverview />
               </div>
             </div>
@@ -407,6 +395,11 @@ const ActivityLogWrapper = React.memo(() => {
 const CategoryBreakdownWrapper = React.memo(() => {
   const { getData } = useActivityData();
   return <CategoryBreakdown data={getData()} />;
+});
+
+const TimeTrackingCardWrapper = React.memo(({ isTracking, onToggleTracking }) => {
+  const { getData } = useActivityData();
+  return <TimeTrackingCard data={getData()} isTracking={isTracking} onToggleTracking={onToggleTracking} />;
 });
 
 // Main dashboard component

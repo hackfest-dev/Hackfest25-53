@@ -3,6 +3,24 @@ const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('bot-controller');
 
+// Health check endpoint for API
+const healthCheck = async (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      message: 'WhatsApp service API is running',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error in health check:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Health check failed',
+      error: error.message
+    });
+  }
+};
+
 // Get WhatsApp QR code
 const getQRCode = async (req, res) => {
   try {
@@ -113,6 +131,7 @@ const logout = async (req, res) => {
 };
 
 module.exports = {
+  healthCheck,
   getQRCode,
   getStatus,
   sendMessage,

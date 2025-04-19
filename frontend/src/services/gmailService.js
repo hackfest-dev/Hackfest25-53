@@ -6,8 +6,9 @@ const gmailService = {
    */
   async checkGoogleAuth() {
     try {
-      const response = await api.get('/api/gmail/auth-status');
-      return response.data.success && response.data.user.hasGmailTokens ? response.data.user : null;
+      // Remove the duplicate /api prefix
+      const response = await api.get('/gmail/auth-status');
+      return response.data.success && response.data.user ? response.data.user : null;
     } catch (error) {
       console.error('Error checking Gmail auth status:', error);
       return null;
@@ -19,7 +20,8 @@ const gmailService = {
    */
   async getAuthUrl() {
     try {
-      const response = await api.get('/api/gmail/auth/url');
+      // Remove the duplicate /api prefix
+      const response = await api.get('/gmail/auth/url');
       return response.data.success ? response.data.authUrl : null;
     } catch (error) {
       console.error('Error getting Gmail auth URL:', error);
@@ -32,7 +34,8 @@ const gmailService = {
    */
   async refreshGoogleToken() {
     try {
-      const response = await api.post('/api/gmail/refresh-token');
+      // Remove the duplicate /api prefix
+      const response = await api.post('/gmail/refresh-token');
       return response.data.success;
     } catch (error) {
       console.error('Error refreshing Google token:', error);
@@ -46,10 +49,13 @@ const gmailService = {
   async getEmails(maxResults = 100) {
     try {
       // Add cache-busting to ensure we get fresh data
+      // Remove the duplicate /api prefix
       const timestamp = new Date().getTime();
-      const response = await api.get(`/api/gmail/emails?maxResults=${maxResults}&_t=${timestamp}`);
+      const response = await api.get(`/gmail/emails?maxResults=${maxResults}&_t=${timestamp}`);
       return response.data;
     } catch (error) {
+      console.error('Error fetching emails:', error);
+      
       // If we get a 401 or 403, we need to handle authorization
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         try {

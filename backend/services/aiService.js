@@ -34,37 +34,66 @@ async function queryGroqAI(prompt, context = {}) {
       }
     ];
     
-    // Note: Groq doesn't support image input directly like Gemini or OpenAI
-    // If screenshot is available, we'll need to handle it differently or use a different service
-    if (context.screenshot) {
-      logger.info("Screenshot provided but Groq doesn't support image input directly. Processing text only.");
-      messages.push({
-        role: "user",
-        content: "Note: I also shared a screenshot with you, but I understand you can't view it. Please help based on the text information provided."
-      });
+    // If no Groq API key, provide a fallback response
+    if (!config.apiKeys.groq) {
+      logger.warn("No Groq API key provided, using fallback response");
+      return getFallbackResponse(prompt);
     }
     
-    // Call Groq API
-    const response = await groq.chat.completions.create({
-      model: "llama3-70b-8192", // Groq supports various models including Llama 3, Mixtral, etc.
-      messages: messages,
-      max_tokens: 1024,
-      temperature: 0.7,
-      top_p: 0.95
-    });
+    // Add timeout for API calls
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
-    logger.info("API response received successfully");
-    
-    if (response.choices && response.choices.length > 0) {
-      return response.choices[0].message.content;
+    try {
+      // Call Groq API with timeout
+      const response = await groq.chat.completions.create({
+        model: "llama3-70b-8192", // Groq supports various models including Llama 3, Mixtral, etc.
+        messages: messages,
+        max_tokens: 1024,
+        temperature: 0.7,
+        top_p: 0.95
+      }, { signal: controller.signal });
+      
+      clearTimeout(timeoutId);
+      
+      logger.info("API response received successfully");
+      
+      if (response.choices && response.choices.length > 0) {
+        return response.choices[0].message.content;
+      }
+    } catch (apiError) {
+      clearTimeout(timeoutId);
+      
+      if (apiError.name === 'AbortError') {
+        logger.error("Groq API request timed out");
+        throw new Error("AI service timed out. Please try again.");
+      }
+      
+      logger.error("Groq API Error:", apiError.response?.data || apiError.message);
+      // Continue to fallback instead of throwing
+      return getFallbackResponse(prompt);
     }
     
-    // Fallback message
+    // Fallback message if we get here
     return "Sorry, I couldn't generate a response. Please try again.";
   } catch (error) {
-    logger.error("Groq API Error:", error.response?.data || error.message);
-    throw new Error(error.response?.data?.error?.message || error.message);
+    logger.error("Groq AI general error:", error.message);
+    return getFallbackResponse(prompt);
   }
+}
+
+// Provide fallback responses when AI is unavailable
+function getFallbackResponse(prompt) {
+  // If we're analyzing emails
+  if (prompt.includes('Analyze the following list of') && prompt.includes('emails')) {
+    // Return a valid JSON structure for email analysis
+    return `{
+      "results": []
+    }`;
+  }
+  
+  // General fallback
+  return "AI service is currently unavailable. Please try again later.";
 }
 
 // Function to search YouTube (unchanged)

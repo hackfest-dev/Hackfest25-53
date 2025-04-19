@@ -15,19 +15,21 @@ const CategoryBreakdown = ({ data }) => {
     
     // Generate dark purple-themed colors for each category
     const colors = Object.keys(categoryCount).map((_, index) => {
-      // Create different shades of purple that work on dark backgrounds
-      const purpleShades = [
-        'rgba(149, 128, 255, 0.7)',
-        'rgba(128, 90, 213, 0.7)',
-        'rgba(168, 130, 255, 0.7)',
-        'rgba(106, 90, 205, 0.7)',
-        'rgba(138, 118, 223, 0.7)',
-        'rgba(122, 104, 220, 0.7)',
-        'rgba(147, 112, 219, 0.7)',
-        'rgba(154, 136, 255, 0.7)',
+      // Create more vibrant color palette with purple hues
+      const colorPalette = [
+        'rgba(149, 128, 255, 0.8)',
+        'rgba(128, 90, 213, 0.8)',
+        'rgba(168, 130, 255, 0.8)',
+        'rgba(106, 90, 205, 0.8)',
+        'rgba(138, 118, 223, 0.8)',
+        'rgba(122, 104, 220, 0.8)', 
+        'rgba(147, 112, 219, 0.8)',
+        'rgba(182, 102, 210, 0.8)',
+        'rgba(220, 118, 255, 0.8)',
+        'rgba(130, 80, 223, 0.8)',
       ];
       
-      return purpleShades[index % purpleShades.length];
+      return colorPalette[index % colorPalette.length];
     });
     
     return {
