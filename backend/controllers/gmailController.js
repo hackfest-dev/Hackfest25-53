@@ -79,41 +79,90 @@ exports.refreshGmailToken = async (req, res) => {
 exports.getEmails = async (req, res) => {
   try {
     const userId = req.user.uid;
-    const maxResults = parseInt(req.query.maxResults) || 100;
+    const maxResults = parseInt(req.query.maxResults) || 30;
+    
+    logger.info(`Getting emails for user ID: ${userId}, isGoogleAuth: ${req.isGoogleAuth}`);
     
     // If user authenticated with Google via Firebase, try to use that first
+    let firebaseAuthSuccess = false;
     if (req.isGoogleAuth) {
       try {
-        // This will use the existing Firebase Google auth
-        await gmailService.ensureTokensFromFirebase(userId, req.user);
+        // Try to extract Gmail tokens from Firebase auth
+        firebaseAuthSuccess = await gmailService.ensureTokensFromFirebase(userId, req.user);
+        logger.info(`Firebase Google auth ${firebaseAuthSuccess ? 'successful' : 'failed'} for user: ${userId}`);
       } catch (firebaseAuthError) {
         logger.warn(`Failed to use Firebase Google auth: ${firebaseAuthError.message}`);
-        // Continue to try normal Gmail auth
       }
     }
     
-    // Get emails from Gmail
+    // Check if we have Gmail tokens
+    const hasTokens = gmailService.hasTokens(userId);
+    if (!hasTokens) {
+      logger.warn(`No Gmail tokens for user: ${userId}, isGoogleAuth: ${req.isGoogleAuth}`);
+      return res.status(401).json({
+        success: false,
+        error: 'Gmail authorization required',
+        message: 'Please authorize access to your Gmail account',
+        isGoogleAuth: req.isGoogleAuth,
+        needsGmailPermissions: req.isGoogleAuth,
+        // Add a timeout to ensure client doesn't hang waiting for emails
+        timeout: true
+      });
+    }
+    
+    // Set a timeout for the whole operation
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Gmail API request timeout')), 20000);
+    });
+    
+    // Get emails from Gmail with timeout
     try {
-      const emails = await gmailService.getEmails(userId, maxResults);
+      // Create a promise race between getting emails and timing out
+      const emailsPromise = gmailService.getEmails(userId, maxResults);
+      const emails = await Promise.race([emailsPromise, timeoutPromise]);
       
-      // Analyze emails for priority
-      const analyzedEmails = await gmailService.analyzeEmailPriority(emails);
+      // Get user email from Gmail API response if possible
+      let userEmail = '';
+      if (emails && emails.length > 0) {
+        // Try to get from email property first
+        const firstEmail = emails[0];
+        if (firstEmail.userEmail) {
+          userEmail = firstEmail.userEmail;
+        }
+      }
       
       return res.json({
         success: true,
-        emails: analyzedEmails
+        emails: emails,
+        userEmail: userEmail,
+        count: emails.length
       });
     } catch (error) {
-      if (error.message.includes('Not authorized')) {
-        // Return 401 with instructions to authorize
-        return res.status(401).json({
+      // Handle timeouts specifically
+      if (error.message === 'Gmail API request timeout') {
+        logger.warn(`Gmail request timed out for user: ${userId}`);
+        return res.status(504).json({
           success: false,
-          error: 'Gmail authorization required',
-          message: 'Please authorize access to your Gmail account'
+          error: 'Request timed out',
+          message: 'The Gmail API request timed out. Please try again.'
         });
       }
       
-      // Re-throw other errors
+      // More specific error handling for auth issues
+      if (error.message.includes('authentication') || 
+          error.message.includes('authorized') || 
+          error.message.includes('auth') ||
+          error.message.includes('token')) {
+        logger.warn(`Gmail auth error for ${userId}: ${error.message}`);
+        return res.status(401).json({
+          success: false,
+          error: 'Gmail authorization required',
+          message: 'Please authorize access to your Gmail account',
+          isGoogleAuth: req.isGoogleAuth,
+          needsGmailPermissions: req.isGoogleAuth
+        });
+      }
+      
       throw error;
     }
   } catch (error) {
@@ -121,7 +170,8 @@ exports.getEmails = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get emails',
-      message: error.message
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

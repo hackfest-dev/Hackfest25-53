@@ -21,12 +21,42 @@ router.get('/auth/url', authController.verifyToken, async (req, res) => {
 // Handle OAuth callback
 router.get('/oauth2callback', async (req, res) => {
   try {
-    const { code } = req.query;
+    const { code, state } = req.query;
+    
     if (!code) {
       return res.status(400).send('Error: No authorization code provided');
     }
 
-    await gmailService.setTokens(code);
+    // Get tokens from the authorization code
+    const tokens = await gmailService.getTokensFromCode(code);
+    
+    // If state contains user ID, use it to store tokens
+    const userId = state || null;
+    if (userId) {
+      // Extract user info from ID token if available
+      let userInfo = null;
+      if (tokens.id_token) {
+        try {
+          // Decode the ID token to get user info
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.decode(tokens.id_token);
+          userInfo = {
+            sub: decoded.sub,
+            email: decoded.email
+          };
+        } catch (decodeError) {
+          console.error('Error decoding ID token:', decodeError);
+        }
+      }
+      
+      // If we have user info, save tokens
+      if (userInfo) {
+        await gmailService.setGmailTokens(tokens, userInfo);
+      }
+    } else {
+      // If no user ID in state, just save tokens without user association
+      await gmailService.setTokens(code);
+    }
     
     // Redirect to frontend with success message
     res.redirect(`/?authStatus=success&message=Successfully authenticated with Gmail`);
