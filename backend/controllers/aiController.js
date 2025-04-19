@@ -48,47 +48,65 @@ exports.getDailyTip = async (req, res) => {
  */
 exports.transcribeAudio = async (req, res) => {
   try {
-    // Use multer middleware to handle the file upload
-    upload.single('audio')(req, res, async (err) => {
-      if (err) {
-        logger.error(`Upload error: ${err.message}`);
+    logger.info('Received audio transcription request');
+    
+    if (!req.body || !req.body.audio) {
+      logger.error('No audio data provided in request body');
+      return res.status(400).json({
+        success: false,
+        error: 'No audio data provided in request'
+      });
+    }
+    
+    // Log some details about the audio data for debugging
+    const audioDataLength = req.body.audio.length;
+    logger.info(`Audio data received: ${audioDataLength} characters`);
+    
+    // Decode base64 audio data
+    try {
+      const audioBuffer = Buffer.from(req.body.audio, 'base64');
+      logger.info(`Decoded base64 to buffer of length: ${audioBuffer.length}`);
+      
+      // Check if buffer is valid
+      if (audioBuffer.length === 0) {
         return res.status(400).json({
           success: false,
-          error: 'File upload failed',
-          message: err.message
+          error: 'Invalid audio data: empty buffer after decoding'
         });
       }
       
-      if (!req.file || !req.file.buffer) {
-        logger.error('No audio file received');
-        return res.status(400).json({
-          success: false,
-          error: 'No audio file received'
-        });
-      }
+      // Call Whisper service to transcribe
+      logger.info('Calling transcribeAudio service function');
+      const transcription = await aiService.transcribeAudio(audioBuffer);
       
-      try {
-        // Pass the buffer to transcription service
-        const transcription = await aiService.transcribeAudio(req.file.buffer);
-        
-        return res.json({
-          success: true,
-          transcription
-        });
-      } catch (transcriptionError) {
-        logger.error(`Transcription error: ${transcriptionError.message}`);
+      if (!transcription || transcription.startsWith('Error:')) {
+        logger.error(`Transcription service error: ${transcription}`);
         return res.status(500).json({
           success: false,
-          error: 'Transcription failed',
-          message: transcriptionError.message
+          error: transcription || 'Failed to transcribe audio'
         });
       }
-    });
+      
+      logger.info('Audio transcription completed successfully');
+      logger.info(`Transcription result: "${transcription}"`);
+      
+      return res.json({
+        success: true,
+        text: transcription
+      });
+    } catch (decodeError) {
+      logger.error(`Error decoding audio data: ${decodeError.message}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid audio data: could not decode base64',
+        details: decodeError.message
+      });
+    }
   } catch (error) {
-    logger.error(`General transcribe error: ${error.message}`);
+    logger.error(`Error in audio transcription: ${error.message}`);
     return res.status(500).json({
       success: false,
-      error: 'Transcription failed',
+      error: 'Failed to transcribe audio',
       message: error.message
     });
   }
