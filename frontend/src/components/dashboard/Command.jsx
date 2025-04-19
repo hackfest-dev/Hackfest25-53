@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { FiSend, FiRefreshCw, FiTerminal, FiCpu } from 'react-icons/fi';
+import api from '../../services/api'; // Import the API service
 
 // Animation configurations
 const thinkingAnimation = {
@@ -227,6 +228,7 @@ const AITerminal = () => {
   const [thoughts, setThoughts] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
+  const [calendarMode, setCalendarMode] = useState(false);
   
   const socketRef = useRef(null);
   const terminalRef = useRef(null);
@@ -320,6 +322,19 @@ const AITerminal = () => {
         return;
       }
       
+      if (data.type === 'result' && calendarMode) {
+        setIsProcessing(false);
+        setIsThinking(false);
+        setCalendarMode(false);
+        
+        addMessage({ 
+          type: 'result', 
+          content: data.content,
+          isCalendarEvent: true
+        });
+        return;
+      }
+      
       switch(data.type) {
         case 'clear_thinking':
           setIsThinking(false);
@@ -367,7 +382,6 @@ const AITerminal = () => {
         case 'token':
           break;
         case 'command':
-          // Instead of adding as a chat message, add the command to thinking
           if (containsJsonActionPattern(data.content)) {
             const match = data.content.match(/"action_input":\s*"([^"]+)"/);
             if (match) {
@@ -453,18 +467,114 @@ const AITerminal = () => {
     }
   };
   
-  const sendCommand = () => {
+  const sendCommand = async () => {
     if (!input.trim() || !isConnected || isProcessing) return;
     
+    // Add user message to the chat
     addMessage({ type: 'user-input', content: input });
     
-    simulateThinkingProcess(input);
+    // Handle input based on current mode
+    if (calendarMode) {
+      // In calendar mode, handle as calendar event creation using API directly
+      setThoughts([
+        { 
+          type: 'thinking', 
+          content: `Creating calendar event: "${input}"`,
+          timestamp: Date.now()
+        }
+      ]);
+      
+      setIsThinking(true);
+      setIsProcessing(true);
+      
+      try {
+        // Call the calendar API directly instead of sending through WebSocket
+        const calendarResponse = await api.post('/calendar/events/natural', { text: input });
+        
+        if (calendarResponse.data.success) {
+          const eventDetails = calendarResponse.data.event;
+          // Format successful calendar creation message
+          const successMessage = `✅ Event created: ${eventDetails.summary}
+Start: ${new Date(eventDetails.start.dateTime).toLocaleString()}
+End: ${new Date(eventDetails.end.dateTime).toLocaleString()}
+
+View in Google Calendar: ${calendarResponse.data.calendarLink}`;
+          
+          // Add as a result message (green box)
+          addMessage({ 
+            type: 'result', 
+            content: successMessage,
+            isCalendarEvent: true
+          });
+          
+          // Turn off calendar mode after successful creation
+          setCalendarMode(false);
+        } else {
+          // Should not happen but handle just in case
+          throw new Error('Failed to create calendar event');
+        }
+      } catch (error) {
+        // Handle calendar authorization errors
+        if (error.response?.status === 401 && error.response?.data?.authUrl) {
+          const authUrl = error.response?.data?.authUrl;
+          
+          // Create error message with link
+          const authMessage = `Calendar authorization required. [Open authorization page](${authUrl})`;
+          
+          addMessage({ 
+            type: 'error', 
+            content: `Error: Calendar authorization required.`,
+            authUrl
+          });
+          
+          // Also add system message explaining what to do
+          addMessage({
+            type: 'system',
+            content: 'You need to authorize access to your Google Calendar. Click the "Open Authorization Page" button below.'
+          });
+          
+          // Create a special auth action message
+          addMessage({
+            type: 'calendar-auth',
+            content: 'Authorize Calendar Access',
+            authUrl
+          });
+        } else {
+          // For other errors
+          addMessage({ 
+            type: 'error', 
+            content: `Error creating calendar event: ${error.response?.data?.error || error.message}`
+          });
+        }
+      } finally {
+        setIsProcessing(false);
+        setIsThinking(false);
+      }
+    } else {
+      // Regular processing through WebSocket
+      simulateThinkingProcess(input);
+      socketRef.current.send(input);
+      setIsProcessing(true);
+    }
     
-    socketRef.current.send(input);
     setInput('');
-    setIsProcessing(true);
   };
   
+  const toggleCalendarMode = () => {
+    setCalendarMode(prev => !prev);
+    if (!calendarMode) {
+      addMessage({ 
+        type: 'system', 
+        content: 'Calendar mode activated. Your next input will be processed as a calendar event.' 
+      });
+    } else {
+      addMessage({ 
+        type: 'system', 
+        content: 'Calendar mode deactivated. Returning to normal operation.' 
+      });
+    }
+  };
+
   const handleReconnect = () => {
     setMessages(prev => prev.filter(m => 
       !(m.type === 'error' && 
@@ -494,6 +604,10 @@ const AITerminal = () => {
     }
   };
 
+  const openAuthUrl = (url) => {
+    window.open(url, '_blank');
+  };
+
   useEffect(() => {
     connectWebSocket();
     
@@ -511,13 +625,12 @@ const AITerminal = () => {
   }, [messages, thoughts]);
   
   const renderMessage = (message) => {
-    const { type, content, id } = message;
+    const { type, content, id, authUrl } = message;
     
     if (containsJsonActionPattern(content)) {
       return null;
     }
     
-    // Don't render command messages in the main chat
     if (type === 'command') {
       return null;
     }
@@ -552,7 +665,7 @@ const AITerminal = () => {
           </div>
         );
       case 'action':
-        return null; // Also hide action messages from the main chat
+        return null;
       case 'system':
         return (
           <div key={id} className="px-4 py-2 text-yellow-300 text-center italic my-2">
@@ -579,6 +692,17 @@ const AITerminal = () => {
             </div>
           </div>
         );
+      case 'calendar-auth':
+        return (
+          <div key={id} className="flex justify-center my-4">
+            <button
+              onClick={() => openAuthUrl(authUrl)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md shadow"
+            >
+              Open Authorization Page
+            </button>
+          </div>
+        );
       default:
         return (
           <div key={id} className="px-6 py-2 text-gray-300 my-2">
@@ -592,7 +716,6 @@ const AITerminal = () => {
     setShowThinking(prev => !prev);
   };
 
-  // Add this to your component
 useEffect(() => {
   const textarea = document.querySelector('textarea');
   if (textarea) {
@@ -603,14 +726,14 @@ useEffect(() => {
   
   return (
     <div className="bg-black h-screen flex flex-col">
-      <div className="p-6 pb-4 bg-gray-800">
+      {/* <div className="p-6 pb-4 bg-gray-800">
         <h1 className="text-3xl font-bold text-indigo-400 mb-2 flex items-center">
           <FiCpu className="mr-2" /> AI Terminal
         </h1>
         <p className="text-gray-400">
           Execute commands or ask questions using natural language. The AI agent will help you accomplish tasks.
         </p>
-      </div>
+      </div> */}
       
       <div className="px-6 py-2 bg-gray-800 border-t border-gray-700 flex justify-between items-center">
         <div className="flex items-center space-x-2">
@@ -698,63 +821,76 @@ useEffect(() => {
       </div>
       
       <div className="p-4 px-20 border-t border-gray-700">
-  <div className="rounded-2xl bg-[#121212] border border-gray-700/50 overflow-hidden shadow-lg">
-    <textarea
-      className="w-full bg-transparent border-0 text-gray-200 pt-4 px-6 focus:outline-none resize-none min-h-[20px] max-h-[200px] overflow-y-auto"
-      placeholder="Type a command or question..."
-      value={input}
-      onChange={handleInputChange}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          if (input.trim() && isConnected && !isProcessing) {
-            handleSend();
-          }
-        } else {
-          handleKeyDown(e);
-        }
-      }}
-      disabled={!isConnected || isProcessing}
-    />
-    <div className="flex items-center px-6 py-4">
-      <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      </button>
-      <div className="flex-1"></div>
-      <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
-        <div className="w-5 h-5 flex items-center justify-center rounded-full border border-white/70">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-          </svg>
+        <div className="rounded-2xl bg-[#121212] border border-gray-700/50 overflow-hidden shadow-lg">
+          {calendarMode && (
+            <div className="bg-purple-900/30 text-purple-300 text-xs px-4 py-1 border-b border-purple-800/50">
+              Calendar Mode: Creating a new event. Type the details of your meeting or appointment.
+            </div>
+          )}
+          <textarea
+            className={`w-full bg-transparent border-0 text-gray-200 pt-4 px-6 focus:outline-none resize-none min-h-[20px] max-h-[200px] overflow-y-auto ${calendarMode ? 'border-l-2 border-purple-500' : ''}`}
+            placeholder={calendarMode ? "Describe your event (e.g., 'Meeting with Alex tomorrow at 3pm')..." : "Type a command or question..."}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (input.trim() && isConnected && !isProcessing) {
+                  handleSend();
+                }
+              } else {
+                handleKeyDown(e);
+              }
+            }}
+            disabled={!isConnected || isProcessing}
+          />
+          <div className="flex items-center px-6 py-4">
+            <button 
+              onClick={toggleCalendarMode}
+              className={`flex items-center justify-center cursor-pointer px-3 py-1.5 rounded-full border ${
+                calendarMode 
+                  ? 'border-purple-500 text-purple-500 bg-purple-500/10 hover:bg-purple-500/20' 
+                  : 'border-white/70 text-white/70 hover:text-white hover:border-white'
+              } mr-2`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm">Schedule</span>
+            </button>
+            <div className="flex-1"></div>
+            <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
+              <div className="w-5 h-5 flex items-center justify-center rounded-full border border-white/70">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              </div>
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || !isConnected || isProcessing}
+              className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                !input.trim() || !isConnected || isProcessing
+                  ? "bg-gray-600 cursor-not-allowed"
+                  : "bg-white hover:bg-gray-200"
+              }`}
+            >
+              {isProcessing ? (
+                <div className="w-4 h-4 border-t-2 border-gray-800 rounded-full animate-spin"></div>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-black" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
-      </button>
-      <button
-        onClick={handleSend}
-        disabled={!input.trim() || !isConnected || isProcessing}
-        className={`flex items-center justify-center w-8 h-8 rounded-full ${
-          !input.trim() || !isConnected || isProcessing
-            ? "bg-gray-600 cursor-not-allowed"
-            : "bg-white hover:bg-gray-200"
-        }`}
-      >
-        {isProcessing ? (
-          <div className="w-4 h-4 border-t-2 border-gray-800 rounded-full animate-spin"></div>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-black" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
+        {isProcessing && !isThinking && (
+          <div className="mt-2 text-xs text-indigo-400 animate-pulse">
+            {calendarMode ? 'Creating calendar event...' : 'AI is processing your request...'}
+          </div>
         )}
-      </button>
-    </div>
-  </div>
-  {isProcessing && !isThinking && (
-    <div className="mt-2 text-xs text-indigo-400 animate-pulse">
-      AI is processing your request...
-    </div>
-  )}
-</div>
+      </div>
     </div>
   );
 };
