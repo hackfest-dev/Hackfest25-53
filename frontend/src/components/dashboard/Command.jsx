@@ -30,16 +30,16 @@ const thoughtBubbleAnimation = {
   }
 };
 
+// Update ThinkingIndicator to look more like a terminal cursor
 const ThinkingIndicator = ({ isVisible }) => {
-  const dots = ['.', '.', '.'];
-  const [count, setCount] = useState(0);
+  const [blink, setBlink] = useState(true);
   
   useEffect(() => {
     if (!isVisible) return;
     
     const interval = setInterval(() => {
-      setCount(prev => (prev + 1) % 4);
-    }, 400);
+      setBlink(prev => !prev);
+    }, 500);
     
     return () => clearInterval(interval);
   }, [isVisible]);
@@ -47,69 +47,124 @@ const ThinkingIndicator = ({ isVisible }) => {
   if (!isVisible) return null;
   
   return (
-    <motion.div 
-      className="flex items-center space-x-2 text-indigo-400 text-sm font-medium py-2"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <div className="w-4 h-4 relative">
-        <motion.div 
-          className="absolute inset-0 bg-indigo-500 rounded-full"
-          animate={{ 
-            scale: [1, 1.2, 1],
-          }}
-          transition={{ 
-            repeat: Infinity,
-            duration: 1.5,
-            ease: "easeInOut"
-          }}
-        />
-      </div>
-      <span>Thinking{dots.slice(0, count).join('')}</span>
-    </motion.div>
+    <div className="flex items-center py-1 text-gray-300 text-sm">
+      <span className="text-green-400 mr-1">$</span>
+      <span className="mr-1">thinking</span>
+      <span className={`inline-block w-2 h-4 ${blink ? 'bg-gray-400' : 'bg-transparent'}`}></span>
+    </div>
   );
 };
 
+// Update ThoughtBubble component to look like terminal output
 const ThoughtBubble = ({ content, type, onComplete }) => {
   const bubbleRef = useRef(null);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onComplete) onComplete();
-    }, content.length * 40 + 1000); // Duration based on content length
-    
-    return () => clearTimeout(timer);
-  }, [content, onComplete]);
 
-  const bubbleClasses = {
-    thinking: "bg-gray-800 text-gray-300 border-gray-700",
-    reasoning: "bg-indigo-900/30 text-indigo-200 border-indigo-700",
-    action: "bg-purple-900/30 text-purple-200 border-purple-700",
-  };
+  // Terminal styling based on type
+  let terminalPrompt = "$ ";
+  let promptColor = "text-green-400";
+
+  if (type === 'thinking') {
+    terminalPrompt = "# ";
+    promptColor = "text-blue-400";
+  } else if (type === 'reasoning') {
+    terminalPrompt = "> ";
+    promptColor = "text-indigo-400";
+  } else if (type === 'action') {
+    terminalPrompt = "$ ";
+    promptColor = "text-green-400";
+  }
+
+  // Special highlighting for command-related thoughts
+  const isCommandRelated = content.includes("Executing:") || 
+                           content.includes("Using tool: terminal") ||
+                           content.toLowerCase().includes("command");
   
   return (
     <motion.div
       ref={bubbleRef}
-      className={`rounded-lg p-3 my-2 border text-sm font-mono whitespace-pre-wrap ${bubbleClasses[type]}`}
+      className="mb-2"
       variants={thoughtBubbleAnimation}
       initial="hidden"
       animate="visible"
       exit="exit"
     >
-      <TypewriterText text={content} />
+      <div className="flex">
+        <span className={`${promptColor} mr-2 flex-shrink-0`}>{terminalPrompt}</span>
+        <div className="text-sm font-mono whitespace-pre-wrap text-gray-300">
+          <TypewriterText text={content} />
+        </div>
+      </div>
     </motion.div>
   );
+};
+
+// Add new TerminalHeader component for the thinking section
+const TerminalHeader = ({ title = "AI Thinking Process" }) => {
+  return (
+    <div className="bg-gray-900 border-b border-gray-700 p-1 flex items-center">
+      <div className="flex space-x-1.5 ml-2">
+        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+      </div>
+      <div className="flex-1 text-center text-xs text-gray-400 font-mono">{title}</div>
+    </div>
+  );
+};
+
+const CodeBlockFormatter = ({ content }) => {
+  if (content.includes('```')) {
+    const parts = content.split(/```(\w*)/);
+    
+    let language = "javascript";
+    const langMatch = content.match(/```(\w+)/);
+    if (langMatch && langMatch[1]) {
+      language = langMatch[1];
+    }
+    
+    return (
+      <div className="w-full">
+        {parts[0] && <div className="mb-2">{parts[0]}</div>}
+        
+        {content.includes('```') && (
+          <div className="rounded-md overflow-hidden">
+            <div className="bg-gray-700 px-4 py-1 text-xs text-gray-300 border-b border-gray-600 flex justify-between">
+              <span>{language}</span>
+              <span className="opacity-50">code</span>
+            </div>
+            
+            <pre className="p-4 bg-gray-800 rounded-b-md overflow-x-auto">
+              <code className="text-sm text-gray-300 font-mono">
+                {content.match(/```(?:\w*\n)?([\s\S]*?)```/)?.[1] || ''}
+              </code>
+            </pre>
+          </div>
+        )}
+        
+        {parts[parts.length-1] && !parts[parts.length-1].match(/```/) && (
+          <div className="mt-2">{parts[parts.length-1]}</div>
+        )}
+      </div>
+    );
+  }
+  
+  return <span>{content}</span>;
 };
 
 const TypewriterText = ({ text }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
   
   useEffect(() => {
-    if (currentIndex >= text.length) return;
+    if (currentIndex >= text.length) {
+      setIsComplete(true);
+      return;
+    }
     
-    const randomDelay = Math.floor(Math.random() * 30) + 10; // Random typing speed
+    const baseDelay = Math.min(text.length > 100 ? 5 : 20, 15);
+    const randomDelay = Math.floor(Math.random() * 10) + baseDelay;
+    
     const timer = setTimeout(() => {
       setDisplayedText(prev => prev + text[currentIndex]);
       setCurrentIndex(prev => prev + 1);
@@ -117,6 +172,10 @@ const TypewriterText = ({ text }) => {
     
     return () => clearTimeout(timer);
   }, [text, currentIndex]);
+  
+  if (text.includes('```') && isComplete) {
+    return <CodeBlockFormatter content={text} />;
+  }
   
   return (
     <>
@@ -132,6 +191,31 @@ const TypewriterText = ({ text }) => {
   );
 };
 
+const cleanThoughtText = (text) => {
+  const cleanedText = text.replace(/\u001b\[\d+;?\d*m/g, '')
+    .replace(/\[\d+;?\d*m/g, '')
+    .replace(/\[0m/g, '')
+    .replace(/\[\d+;\d+;\d+m/g, '')
+    .replace(/\[\d+;\d+m\[\d+;\d+m/g, '')
+    .replace(/^Thought:\s*/i, '')
+    .replace(/Observing results.../g, '')
+    .trim();
+  
+  return cleanedText;
+};
+
+const containsJsonActionPattern = (content) => {
+  if (typeof content !== 'string') return false;
+  
+  const hasActionPattern = content.includes('"action"') && content.includes('"action_input"');
+  
+  const looksLikeJson = 
+    (content.trim().startsWith('{') || content.includes('{"action"')) && 
+    (content.includes('"terminal"') || content.includes('"action_input"'));
+    
+  return hasActionPattern || looksLikeJson;
+};
+
 const AITerminal = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -140,15 +224,13 @@ const AITerminal = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   
-  // Thinking process states
   const [thoughts, setThoughts] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
-  const [currentThoughtIndex, setCurrentThoughtIndex] = useState(0);
+  const [showThinking, setShowThinking] = useState(true);
   
   const socketRef = useRef(null);
   const terminalRef = useRef(null);
   
-  // Connect to WebSocket
   const connectWebSocket = () => {
     setIsConnecting(true);
     setError(null);
@@ -183,7 +265,7 @@ const AITerminal = () => {
         );
         
         if (!errorExists) {
-          addMessage({ type: 'error', content: 'WebSocket connection error' });
+          // addMessage({ type: 'error', content: 'WebSocket connection error' });
         }
       };
       
@@ -197,57 +279,109 @@ const AITerminal = () => {
   const simulateThinkingProcess = (query) => {
     setIsThinking(true);
     setThoughts([]);
-    setCurrentThoughtIndex(0);
     
-    // Generate simulated thinking steps based on the query
     const thinkingSteps = [
       { 
         type: 'thinking', 
         content: `Analyzing query: "${query}"` 
-      },
-      { 
-        type: 'reasoning', 
-        content: `The user is asking about ${query.includes('file') ? 'file operations' : 'a general command'}. Let me think about the best approach...` 
-      },
-      { 
-        type: 'action', 
-        content: `I'll need to ${query.includes('search') ? 'search for relevant information' : 'execute a command'} to address this request.` 
-      },
-      { 
-        type: 'reasoning', 
-        content: `Considering the context and potential system constraints, I should proceed with caution and verify each step.` 
       }
     ];
     
-    // Display thinking steps sequentially
-    let delay = 20;
-    thinkingSteps.forEach((thought, index) => {
-      delay += 800 + Math.random() * 1200; // Random delay between thoughts
-      setTimeout(() => {
-        setThoughts(prev => [...prev, thought]);
-        setCurrentThoughtIndex(index);
-      }, delay);
-    });
-    
-    // End thinking process
-    setTimeout(() => {
-      setIsThinking(false);
-    }, delay + 1500);
+    setThoughts(thinkingSteps);
   };
   
   const handleSocketMessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       
+      if (data.type === 'verbose' && (
+        data.content.includes('Entering new AgentExecutor chain') ||
+        data.content.includes('Finished chain') ||
+        data.content.includes('[0m') ||
+        data.content.includes('[32;1m') ||
+        data.content.includes('[1;3m') ||
+        data.content.includes('Thought:') ||
+        data.content.includes('Action:') ||
+        data.content.includes('Final Answer:') ||
+        data.content.trim() === '' ||
+        /^\s*\[\d+;\d+m\s*$/.test(data.content) ||
+        data.content.includes('"action"') ||
+        data.content.includes('"action_input"') ||
+        data.content.trim().startsWith('{') ||
+        data.content.trim().endsWith('}') ||
+        containsJsonActionPattern(data.content) ||
+        data.content.trim() === '```' ||
+        data.content.trim().startsWith('```{')
+      )) {
+        return;
+      }
+      
+      if (containsJsonActionPattern(data.content)) {
+        return;
+      }
+      
       switch(data.type) {
-        case 'thinking':
-        case 'reasoning':
-          // Add to thinking process visualization
-          setThoughts(prev => [...prev, { type: data.type, content: data.content }]);
+        case 'clear_thinking':
+          setIsThinking(false);
+          break;
+          
+        case 'thinking_step':
+          setThoughts(prev => [...prev, { 
+            type: 'thinking', 
+            content: cleanThoughtText(data.content),
+            timestamp: Date.now() 
+          }]);
+          setIsThinking(true);
+          break;
+
+        case 'reasoning_step':
+          setThoughts(prev => {
+            const newThoughts = [...prev];
+            if (newThoughts.length >= 20) {
+              newThoughts.shift();
+            }
+            return [...newThoughts, { 
+              type: 'reasoning', 
+              content: cleanThoughtText(data.content),
+              timestamp: Date.now()
+            }];
+          });
+          setIsThinking(true);
+          break;
+
+        case 'action_step':
+          setThoughts(prev => {
+            const newThoughts = [...prev];
+            if (newThoughts.length >= 20) {
+              newThoughts.shift();
+            }
+            return [...newThoughts, { 
+              type: 'action', 
+              content: cleanThoughtText(data.content),
+              timestamp: Date.now()
+            }];
+          });
+          setIsThinking(true);
+          break;
+          
+        case 'token':
           break;
         case 'command':
-          setIsThinking(false);
-          addMessage({ type: 'command', content: data.content });
+          // Instead of adding as a chat message, add the command to thinking
+          if (containsJsonActionPattern(data.content)) {
+            const match = data.content.match(/"action_input":\s*"([^"]+)"/);
+            if (match) {
+              data.content = match[1].replace(/\\"/g, '"');
+            } else {
+              return;
+            }
+          }
+          
+          setThoughts(prev => [...prev, { 
+            type: 'action', 
+            content: `Executing command: ${data.content}`,
+            timestamp: Date.now()
+          }]);
           break;
         case 'output':
           try {
@@ -266,10 +400,25 @@ const AITerminal = () => {
           break;
         case 'result':
           setIsProcessing(false);
-          addMessage({ type: 'result', content: data.content });
+          setIsThinking(false);
+          
+          let formattedContent = data.content;
+          
+          if (formattedContent.startsWith('[32;1m') || 
+              formattedContent.startsWith('Thought:') ||
+              formattedContent.startsWith('[1;3m')) {
+            
+            const cleanMatch = formattedContent.match(/(?:Thought:|Final Answer:)?(.*)/s);
+            if (cleanMatch && cleanMatch[1]) {
+              formattedContent = cleanMatch[1].trim();
+            }
+          }
+          
+          addMessage({ type: 'result', content: formattedContent });
           break;
         case 'error':
           setIsProcessing(false);
+          setIsThinking(false);
           addMessage({ type: 'error', content: `Error: ${data.content}` });
           break;
         case 'system':
@@ -283,13 +432,11 @@ const AITerminal = () => {
       addMessage({ type: 'output', content: event.data });
     }
     
-    // Auto-scroll to the bottom
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   };
   
-  // Add a message to the terminal
   const addMessage = (message) => {
     if (message.type === 'system' && 
         (message.content === 'Connected to AI Terminal Agent' || 
@@ -306,22 +453,18 @@ const AITerminal = () => {
     }
   };
   
-  // Send a command to the WebSocket server
   const sendCommand = () => {
     if (!input.trim() || !isConnected || isProcessing) return;
     
-    addMessage({ type: 'command', content: input });
+    addMessage({ type: 'user-input', content: input });
     
-    // Simulate thinking process before sending to server
     simulateThinkingProcess(input);
     
-    // Actually send to server
     socketRef.current.send(input);
     setInput('');
     setIsProcessing(true);
   };
   
-  // Handle reconnect button click
   const handleReconnect = () => {
     setMessages(prev => prev.filter(m => 
       !(m.type === 'error' && 
@@ -336,8 +479,21 @@ const AITerminal = () => {
     
     connectWebSocket();
   };
+
+  const handleInputChange = (e) => setInput(e.target.value);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && input.trim() && isConnected && !isProcessing) {
+      sendCommand(input);
+    }
+  };
   
-  // Connect on component mount
+  const handleSend = () => {
+    if (input.trim() && isConnected && !isProcessing) {
+      sendCommand(input);
+    }
+  };
+
   useEffect(() => {
     connectWebSocket();
     
@@ -348,34 +504,45 @@ const AITerminal = () => {
     };
   }, []);
   
-  // Auto-scroll when messages change
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [messages, thoughts]);
   
-  // Render a message based on its type
   const renderMessage = (message) => {
     const { type, content, id } = message;
     
+    if (containsJsonActionPattern(content)) {
+      return null;
+    }
+    
+    // Don't render command messages in the main chat
+    if (type === 'command') {
+      return null;
+    }
+    
     switch(type) {
-      case 'command':
-        return (
-          <div key={id} className="px-4 py-2 font-semibold text-green-400 border-b border-gray-800">
-            <span className="text-gray-400 mr-2">$</span>{content}
-          </div>
-        );
       case 'output':
         return (
-          <div key={id} className="px-6 py-2 text-gray-300 whitespace-pre-wrap font-mono">
-            {content}
+          <div key={id} className="flex justify-start mb-4">
+            <div className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 max-w-2xl">
+              <div className="font-semibold mb-1 text-xs text-gray-500">Output</div>
+              <div className="whitespace-pre-wrap font-mono">
+                {content}
+              </div>
+            </div>
           </div>
         );
       case 'error':
         return (
-          <div key={id} className="px-6 py-2 text-red-400 whitespace-pre-wrap font-mono bg-red-900/20 border-l-2 border-red-500">
-            {content}
+          <div key={id} className="flex justify-start mb-4">
+            <div className="px-4 py-2 rounded-lg bg-red-900/20 text-red-400 border border-red-800 max-w-2xl">
+              <div className="font-semibold mb-1 text-xs text-red-500">Error</div>
+              <div className="whitespace-pre-wrap font-mono">
+                {content}
+              </div>
+            </div>
           </div>
         );
       case 'verbose':
@@ -385,34 +552,57 @@ const AITerminal = () => {
           </div>
         );
       case 'action':
+        return null; // Also hide action messages from the main chat
+      case 'system':
         return (
-          <div key={id} className="px-6 py-1 text-purple-300 text-sm italic">
+          <div key={id} className="px-4 py-2 text-yellow-300 text-center italic my-2">
             {content}
           </div>
         );
-      case 'system':
+      case 'user-input':
         return (
-          <div key={id} className="px-4 py-2 text-yellow-300 text-center italic">
-            {content}
+          <div key={id} className="flex justify-end mb-4">
+            <div className="px-4 py-2 rounded-lg bg-indigo-900/40 text-indigo-100 border border-indigo-700 max-w-2xl">
+              <div className="font-semibold mb-1 text-xs text-indigo-500">You</div>
+              <div>{content}</div>
+            </div>
           </div>
         );
       case 'result':
         return (
-          <div key={id} className="px-6 py-2 text-green-300 font-semibold border-l-2 border-green-500 bg-green-900/20">
-            ✓ {content}
+          <div key={id} className="flex justify-start mb-4">
+            <div className="px-4 py-2 rounded-lg bg-green-900/20 text-green-300 border border-green-700 max-w-2xl">
+              <div className="font-semibold mb-1 text-xs text-green-500">Result</div>
+              <div>
+                <CodeBlockFormatter content={content} />
+              </div>
+            </div>
           </div>
         );
       default:
         return (
-          <div key={id} className="px-6 py-2 text-gray-300">
+          <div key={id} className="px-6 py-2 text-gray-300 my-2">
             {content}
           </div>
         );
     }
   };
   
+  const toggleThinking = () => {
+    setShowThinking(prev => !prev);
+  };
+
+  // Add this to your component
+useEffect(() => {
+  const textarea = document.querySelector('textarea');
+  if (textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  }
+}, [input]);
+  
   return (
-    <div className="bg-gray-900 h-screen flex flex-col">
+    <div className="bg-black h-screen flex flex-col">
       <div className="p-6 pb-4 bg-gray-800">
         <h1 className="text-3xl font-bold text-indigo-400 mb-2 flex items-center">
           <FiCpu className="mr-2" /> AI Terminal
@@ -422,7 +612,6 @@ const AITerminal = () => {
         </p>
       </div>
       
-      {/* Connection status */}
       <div className="px-6 py-2 bg-gray-800 border-t border-gray-700 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
@@ -431,98 +620,141 @@ const AITerminal = () => {
           </span>
         </div>
         
-        {!isConnected && !isConnecting && (
-          <button 
-            onClick={handleReconnect}
-            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md flex items-center"
-          >
-            <FiRefreshCw className="mr-1" /> Reconnect
-          </button>
-        )}
-      </div>
-      
-      {/* Main terminal */}
-      <div 
-        ref={terminalRef}
-        className="flex-1 overflow-y-auto bg-gray-900 text-gray-200 font-mono text-sm"
-      >
-        {error && (
-          <div className="bg-red-900/30 text-red-300 p-4 m-4 rounded-md border-l-4 border-red-500">
-            {error}
-          </div>
-        )}
-        
-        {messages.length === 0 && !error && (
-          <div className="p-8 text-center text-gray-500 italic">
-            <FiTerminal className="mx-auto text-4xl mb-2" />
-            <p>Type a command or question to begin</p>
-          </div>
-        )}
-        
-        <div className="space-y-1 py-2">
-          {messages.map(renderMessage)}
-          
-          {/* Thinking process visualization */}
-          {isThinking && (
-            <motion.div 
-              className="px-6 py-3 mx-4 my-2"
-              variants={thinkingAnimation}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
+        <div className="flex items-center space-x-3">
+          {thoughts.length > 0 && (
+            <button 
+              onClick={toggleThinking}
+              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md flex items-center text-sm"
             >
-              <ThinkingIndicator isVisible={isThinking} />
-              
-              <AnimatePresence>
-                {thoughts.map((thought, index) => (
-                  <ThoughtBubble 
-                    key={index}
-                    content={thought.content}
-                    type={thought.type}
-                    onComplete={index === thoughts.length - 1 ? () => {} : null}
-                  />
-                ))}
-              </AnimatePresence>
-            </motion.div>
+              <span className="mr-1">{showThinking ? 'Hide' : 'Show'} Thinking</span>
+            </button>
+          )}
+          
+          {!isConnected && !isConnecting && (
+            <button 
+              onClick={handleReconnect}
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md flex items-center"
+            >
+              <FiRefreshCw className="mr-1" /> Reconnect
+            </button>
           )}
         </div>
       </div>
       
-      {/* Input area */}
-      <div className="p-4 bg-gray-800 border-t border-gray-700">
-        <div className="flex rounded-md bg-gray-700 overflow-hidden">
-          <span className="bg-gray-800 px-3 flex items-center text-gray-400">$</span>
-          <input
-            type="text"
-            className="flex-1 bg-transparent border-0 text-gray-200 p-3 focus:outline-none font-mono"
-            placeholder="Type a command or question..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendCommand()}
-            disabled={!isConnected || isProcessing}
-          />
-          <button
-            onClick={sendCommand}
-            disabled={!input.trim() || !isConnected || isProcessing}
-            className={`px-4 text-white flex items-center ${
-              !input.trim() || !isConnected || isProcessing 
-                ? 'bg-gray-600 cursor-not-allowed' 
-                : 'bg-indigo-600 hover:bg-indigo-700'
-            }`}
-          >
-            {isProcessing ? 
-              <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin"></div> : 
-              <FiSend />
-            }
-          </button>
+      <div className="flex flex-1 overflow-hidden">
+        <div 
+          ref={terminalRef}
+          className="flex-1 overflow-y-auto bg-gray-900 text-gray-200 font-mono text-sm px-4"
+        >
+          {error && (
+            <div className="bg-red-900/30 text-red-300 p-4 m-4 rounded-md border-l-4 border-red-500">
+              {error}
+            </div>
+          )}
+          
+          {messages.length === 0 && !error && (
+            <div className="p-8 text-center text-gray-500 italic">
+              <FiTerminal className="mx-auto text-4xl mb-2" />
+              <p>Type a command or question to begin</p>
+            </div>
+          )}
+          
+          <div className="space-y-1 py-2 mb-4">
+            {messages.map(renderMessage)}
+          </div>
         </div>
         
-        {isProcessing && !isThinking && (
-          <div className="mt-2 text-xs text-indigo-400 animate-pulse">
-            AI is processing your request...
+        {thoughts.length > 0 && showThinking && (
+          <div className={`border-l border-gray-700 bg-gray-900 overflow-y-auto flex flex-col ${window.innerWidth < 768 ? 'w-full absolute inset-0 z-10' : 'w-96'}`}>
+            <TerminalHeader title="AI Thinking Terminal" />
+            <div className="flex-1 p-2 font-mono bg-gray-950 overflow-y-auto">
+              {window.innerWidth < 768 && (
+                <button 
+                  onClick={toggleThinking} 
+                  className="absolute top-2 right-2 text-gray-400 hover:text-white z-20"
+                >
+                  ✕
+                </button>
+              )}
+              <div className="opacity-70 text-xs text-gray-500 mb-2">
+                # Terminal session started
+                <br />
+                # AI processing thoughts...
+              </div>
+              
+              {thoughts.map((thought, index) => (
+                <ThoughtBubble 
+                  key={`thought-${index}-${thought.timestamp}`}
+                  content={thought.content}
+                  type={thought.type}
+                  onComplete={null}
+                />
+              ))}
+              
+              {isThinking && <ThinkingIndicator isVisible={isThinking} />}
+            </div>
           </div>
         )}
       </div>
+      
+      <div className="p-4 px-20 border-t border-gray-700">
+  <div className="rounded-2xl bg-[#121212] border border-gray-700/50 overflow-hidden shadow-lg">
+    <textarea
+      className="w-full bg-transparent border-0 text-gray-200 pt-4 px-6 focus:outline-none resize-none min-h-[20px] max-h-[200px] overflow-y-auto"
+      placeholder="Type a command or question..."
+      value={input}
+      onChange={handleInputChange}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (input.trim() && isConnected && !isProcessing) {
+            handleSend();
+          }
+        } else {
+          handleKeyDown(e);
+        }
+      }}
+      disabled={!isConnected || isProcessing}
+    />
+    <div className="flex items-center px-6 py-4">
+      <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+      <div className="flex-1"></div>
+      <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
+        <div className="w-5 h-5 flex items-center justify-center rounded-full border border-white/70">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+        </div>
+      </button>
+      <button
+        onClick={handleSend}
+        disabled={!input.trim() || !isConnected || isProcessing}
+        className={`flex items-center justify-center w-8 h-8 rounded-full ${
+          !input.trim() || !isConnected || isProcessing
+            ? "bg-gray-600 cursor-not-allowed"
+            : "bg-white hover:bg-gray-200"
+        }`}
+      >
+        {isProcessing ? (
+          <div className="w-4 h-4 border-t-2 border-gray-800 rounded-full animate-spin"></div>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-black" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        )}
+      </button>
+    </div>
+  </div>
+  {isProcessing && !isThinking && (
+    <div className="mt-2 text-xs text-indigo-400 animate-pulse">
+      AI is processing your request...
+    </div>
+  )}
+</div>
     </div>
   );
 };

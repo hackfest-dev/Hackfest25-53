@@ -131,50 +131,84 @@ async function setTokens(code) {
   }
 }
 
-// Get upcoming events
+// Get upcoming events with improved error handling and logging
 async function getUpcomingEvents(userId, maxResults = 10, timeMin = null, timeMax = null) {
+  // Log the request details for debugging
+  console.log(`getUpcomingEvents called for userId: ${userId}`);
+  console.log(`Parameters: maxResults=${maxResults}, timeMin=${timeMin}, timeMax=${timeMax}`);
+  console.log(`User has token: ${userTokensMap.has(userId)}`);
+  
   // Get the user's tokens
   if (!userId || !userTokensMap.has(userId)) {
-    await authorize(userId);
-    throw new Error('Not authorized - please authorize first');
+    console.log('No tokens available for user:', userId);
+    
+    try {
+      // Try to get authorization
+      const authUrl = await authorize(userId);
+      
+      // If authorize returns a URL, it means we need user authorization
+      if (typeof authUrl === 'string') {
+        console.log('User needs to authorize. Auth URL generated:', authUrl);
+        throw new Error('Not authorized - please authorize first');
+      }
+    } catch (authError) {
+      console.error('Authorization error:', authError);
+      throw authError;
+    }
   }
 
-  // Set the OAuth client with user's tokens
-  oauth2Client.setCredentials(userTokensMap.get(userId));
-  
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-  
-  const now = timeMin ? new Date(timeMin) : new Date();
-  
-  const queryParams = {
-    calendarId: CALENDAR_ID,
-    timeMin: now.toISOString(),
-    maxResults,
-    singleEvents: true,
-    orderBy: 'startTime',
-  };
-  
-  // Add timeMax if provided
-  if (timeMax) {
-    queryParams.timeMax = new Date(timeMax).toISOString();
+  try {
+    // Set the OAuth client with user's tokens
+    const userTokens = userTokensMap.get(userId);
+    console.log('Using tokens for user:', userId);
+    oauth2Client.setCredentials(userTokens);
+    
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    
+    const now = timeMin ? new Date(timeMin) : new Date();
+    
+    const queryParams = {
+      calendarId: CALENDAR_ID,
+      timeMin: now.toISOString(),
+      maxResults,
+      singleEvents: true,
+      orderBy: 'startTime',
+    };
+    
+    // Add timeMax if provided
+    if (timeMax) {
+      queryParams.timeMax = new Date(timeMax).toISOString();
+    }
+    
+    console.log('Sending calendar API request with params:', queryParams);
+    
+    const response = await calendar.events.list(queryParams);
+    
+    const events = response.data.items;
+    if (!events || events.length === 0) {
+      console.log('No upcoming events found.');
+      return [];
+    }
+    
+    console.log(`Found ${events.length} upcoming events:`);
+    events.forEach((event, i) => {
+      const start = event.start.dateTime || event.start.date;
+      const end = event.end.dateTime || event.end.date;
+      console.log(`${i + 1}. ${event.summary} (${start} to ${end})`);
+    });
+    
+    return events;
+  } catch (error) {
+    console.error('Error getting calendar events:', error);
+    
+    // If token is invalid, clean it up
+    if (error.message.includes('invalid_grant') || error.message.includes('Invalid Credentials')) {
+      console.log('Removing invalid token for user:', userId);
+      userTokensMap.delete(userId);
+    }
+    
+    throw error;
   }
-  
-  const response = await calendar.events.list(queryParams);
-  
-  const events = response.data.items;
-  if (!events || events.length === 0) {
-    console.log('No upcoming events found.');
-    return [];
-  }
-  
-  console.log('Upcoming events:');
-  events.forEach((event, i) => {
-    const start = event.start.dateTime || event.start.date;
-    const end = event.end.dateTime || event.end.date;
-    console.log(`${i + 1}. ${event.summary} (${start} to ${end})`);
-  });
-  
-  return events;
 }
 
 // Process natural language to calendar event

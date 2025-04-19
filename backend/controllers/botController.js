@@ -105,15 +105,17 @@ const sendMessage = async (req, res) => {
 // Logout and regenerate QR code
 const logout = async (req, res) => {
   try {
-    logger.info('Logout requested');
+    logger.info('Logout requested from API');
     const result = await whatsappService.logout();
     
     if (result.success) {
+      logger.info('Logout successful, responding to client');
       return res.status(200).json({
         success: true,
         message: 'Logged out successfully, QR code will be regenerated'
       });
     } else {
+      logger.error('Logout failed:', result.error);
       return res.status(500).json({
         success: false,
         message: 'Failed to logout',

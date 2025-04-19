@@ -66,23 +66,42 @@ api.interceptors.response.use(
 // Method to set the auth token
 const setAuthToken = (token) => {
   currentToken = token;
+  localStorage.setItem('token', token); // Also store in localStorage for persistence
+  console.log('Auth token set:', token ? 'Token present (hidden for security)' : 'No token');
 };
 
 // Method to clear the auth token
 const clearAuthToken = () => {
   currentToken = null;
+  localStorage.removeItem('token');
+  console.log('Auth token cleared');
 };
 
 // Method to get the decoded token for user info
 const getDecodedToken = () => {
-  if (!currentToken) return null;
+  // Try to get token from state, then localStorage
+  const token = currentToken || localStorage.getItem('token');
+  if (!token) return null;
+  
   try {
-    return jwtDecode(currentToken);
+    return jwtDecode(token);
   } catch (error) {
     console.error('Error decoding token:', error);
     return null;
   }
 };
+
+// Initialize token from localStorage if available
+const initToken = () => {
+  const storedToken = localStorage.getItem('token');
+  if (storedToken) {
+    currentToken = storedToken;
+    console.log('Auth token initialized from localStorage');
+  }
+};
+
+// Call this function immediately to ensure token is loaded
+initToken();
 
 /**
  * Toggle the tracking service on or off
@@ -157,6 +176,129 @@ const healthCheck = async () => {
   }
 };
 
+/**
+ * Get user's current location (city name)
+ * @returns {Promise<string>} The user's location
+ */
+const getUserLocation = async () => {
+  try {
+    // Check cache first
+    const cachedLocation = localStorage.getItem('userLocation');
+    const cachedTimestamp = localStorage.getItem('userLocationTimestamp');
+    
+    // If we have a cached location that's less than 24 hours old, use it
+    if (cachedLocation && cachedTimestamp) {
+      const cacheAge = Date.now() - parseInt(cachedTimestamp, 10);
+      if (cacheAge < 24 * 60 * 60 * 1000) { // 24 hours
+        console.log('Using cached location:', cachedLocation);
+        return cachedLocation;
+      }
+    }
+    
+    // First try to get location from browser geolocation
+    if (navigator.geolocation) {
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 5000, // Reduced timeout to 5 seconds
+            maximumAge: 3600000 // 1 hour cache
+          });
+        });
+        
+        const { latitude, longitude } = position.coords;
+        
+        // Reverse geocode to get city name
+        const response = await fetch(
+          `https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid=436ccee582ab8d46003d6b90e5caeefd`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.length > 0) {
+            const location = data[0].name;
+            // Cache the result
+            localStorage.setItem('userLocation', location);
+            localStorage.setItem('userLocationTimestamp', Date.now().toString());
+            return location;
+          }
+        }
+      } catch (geoError) {
+        console.warn('Geolocation error:', geoError);
+        // Continue to fallback methods
+      }
+    }
+    
+    // Fallback to IP-based geolocation with timeout
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const ipResponse = await fetch('https://ipapi.co/json/', { 
+        signal: controller.signal 
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (ipResponse.ok) {
+        const ipData = await ipResponse.json();
+        if (ipData.city) {
+          // Cache the result
+          localStorage.setItem('userLocation', ipData.city);
+          localStorage.setItem('userLocationTimestamp', Date.now().toString());
+          return ipData.city;
+        }
+      }
+    } catch (ipError) {
+      console.warn('IP geolocation error:', ipError);
+      // Fall through to default
+    }
+    
+    // Use default if all else fails
+    const defaultLocation = 'New York';
+    localStorage.setItem('userLocation', defaultLocation);
+    localStorage.setItem('userLocationTimestamp', Date.now().toString());
+    return defaultLocation;
+  } catch (error) {
+    console.error('Error getting user location:', error);
+    return 'New York'; // Default location on error
+  }
+};
+
+/**
+ * Check calendar authentication status
+ * @returns {Promise<Object>} Response with calendar auth status
+ */
+const checkCalendarAuth = async () => {
+  try {
+    // Ensure token is loaded from localStorage
+    initToken();
+    
+    // Make API call to check calendar auth
+    const response = await api.get('/calendar/events');
+    return { 
+      isAuthorized: true, 
+      events: response.data.events,
+      message: 'Calendar access authorized'
+    };
+  } catch (error) {
+    console.warn('Calendar auth check failed:', error.response?.data);
+    
+    // If we got an authUrl, return it so it can be handled
+    if (error.response?.data?.authUrl) {
+      return { 
+        isAuthorized: false, 
+        authUrl: error.response.data.authUrl,
+        message: 'Calendar authorization required'
+      };
+    }
+    
+    return { 
+      isAuthorized: false, 
+      message: error.message
+    };
+  }
+};
+
 export default {
   get: (url, config = {}) => api.get(url, config),
   post: (url, data, config = {}) => api.post(url, data, config),
@@ -166,8 +308,11 @@ export default {
   setAuthToken,
   clearAuthToken,
   getDecodedToken,
+  initToken,
   toggleTracking,
   getTrackingStatus,
-  logoutWhatsApp,  // Add this new method
-  healthCheck,     // Add this new method
+  logoutWhatsApp,
+  healthCheck,
+  getUserLocation,
+  checkCalendarAuth, // Add this new method
 };

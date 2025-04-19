@@ -85,7 +85,7 @@ app.get('/api/test-ai-routes', (req, res) => {
 });
 
 // Make sure to register routes in the correct order
-app.use('/api/bot', authController.verifyToken, botRoutes); // Protected by auth
+app.use('/api/bot', botRoutes); // Remove auth protection for the entire router
 app.use('/api/screenshot', authController.verifyToken, screenshotRoutes); // Protected by auth
 app.use('/api/command', authController.verifyToken, commandRoutes); // Protected by auth
 app.use('/api/calendar', calendarRoutes); // Calendar has its own auth handling
@@ -133,19 +133,26 @@ io.on('connection', async (socket) => {
   logger.info(`New client connected: ${socket.id}`);
 
   try {
+    // Get fresh status from WhatsApp service
     const status = botService.getStatus();
     const qr = botService.getQRCode();
 
+    // Log what we're sending to the client
+    logger.info(`Sending initial status to client: connected=${status.connected}`);
+    logger.info(`Sending initial QR state: ${qr ? 'has QR' : 'no QR'}`);
+
+    // Always emit status on new connection
     socket.emit('whatsapp-status', {
       status: status.connected ? 'connected' : 'disconnected',
+      connected: status.connected,
       message: status.connected ? 'Connected to WhatsApp' : 'Not connected'
     });
 
+    // Only send QR if we have one and we're not connected
     if (qr && !status.connected) {
       socket.emit('whatsapp-qr', { qr });
+      logger.info('Sent QR code to newly connected client');
     }
-
-    logger.info('Sent initial status to new client');
   } catch (error) {
     logger.error('Error during socket init:', error);
     socket.emit('error', { message: 'Failed to fetch initial status' });
