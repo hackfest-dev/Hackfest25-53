@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-Agent Console</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+    #log {
+      border: 1px solid #ccc;
+      padding: 10px;
+      height: 400px;
+      overflow-y: scroll;
+      background-color: #f9f9f9;
+      font-family: monospace;
+    }
+    #command {
+      width: 80%;
+      padding: 10px;
+      margin-right: 10px;
+    }
+    #submit-btn {
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Multi-Agent System Console</h1>
+  <div id="log"></div>
+  <form id="command-form">
+    <input type="text" id="command" placeholder="Enter command" autocomplete="off" />
+    <button type="submit" id="submit-btn">Send</button>
+  </form>
+
+  <script>
+    const logDiv = document.getElementById("log");
+    const commandForm = document.getElementById("command-form");
+    const commandInput = document.getElementById("command");
+
+    const socket = new WebSocket("ws://localhost:6789");
+
+    socket.onopen = () => {
+      appendLog("Connected to server.");
+    };
+
+    socket.onmessage = event => {
+      appendLog(event.data);
+    };
+
+    socket.onerror = error => {
+      appendLog("WebSocket error: " + error);
+    };
+
+    socket.onclose = () => {
+      appendLog("Disconnected from WebSocket server.");
+    };
+
+    commandForm.addEventListener("submit", function(e) {
+      e.preventDefault();
+      const command = commandInput.value;
+      if (command.trim() !== "") {
+        socket.send(command);
+        commandInput.value = "";
+      }
+    });
+
+    function appendLog(message) {
+      const messageElement = document.createElement("div");
+      messageElement.textContent = message;
+      logDiv.appendChild(messageElement);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+  </script>
+</body>
+</html>
