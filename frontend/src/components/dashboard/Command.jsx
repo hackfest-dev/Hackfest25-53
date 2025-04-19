@@ -1,7 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { FiSend, FiRefreshCw, FiTerminal, FiCpu } from 'react-icons/fi';
+import { useLocation } from 'react-router-dom';
 import api from '../../services/api'; // Import the API service
+import Navbar from './Navbar'; // Import Navbar component
+import Sidebar from './Sidebar'; // Import Sidebar component
+
+// Custom scrollbar styles
+const scrollbarStyles = `
+  .terminal-scroll::-webkit-scrollbar {
+    width: 4px;
+    background: transparent;
+  }
+  
+  .terminal-scroll::-webkit-scrollbar-thumb {
+    background: rgba(76, 61, 139, 0.5);
+    border-radius: 4px;
+  }
+  
+  .terminal-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(94, 78, 153, 0.7);
+  }
+  
+  .terminal-scroll::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+  }
+  
+  .terminal-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(76, 61, 139, 0.5) transparent;
+  }
+`;
 
 // Animation configurations
 const thinkingAnimation = {
@@ -543,7 +573,7 @@ View in Google Calendar: ${calendarResponse.data.calendarLink}`;
           // For other errors
           addMessage({ 
             type: 'error', 
-            content: `Error creating calendar event: ${error.response?.data?.error || error.message}`
+            content: `Error creating calendar event: ${error.response?.data?.error || error.message}` 
           });
         }
       } finally {
@@ -668,7 +698,7 @@ View in Google Calendar: ${calendarResponse.data.calendarLink}`;
         return null;
       case 'system':
         return (
-          <div key={id} className="px-4 py-2 text-yellow-300 text-center italic my-2">
+          <div key={id} className="px-4 py-2 text-purple-300 font-bold text-center my-2">
             {content}
           </div>
         );
@@ -725,17 +755,10 @@ useEffect(() => {
 }, [input]);
   
   return (
-    <div className="bg-black h-screen flex flex-col">
-      {/* <div className="p-6 pb-4 bg-gray-800">
-        <h1 className="text-3xl font-bold text-indigo-400 mb-2 flex items-center">
-          <FiCpu className="mr-2" /> AI Terminal
-        </h1>
-        <p className="text-gray-400">
-          Execute commands or ask questions using natural language. The AI agent will help you accomplish tasks.
-        </p>
-      </div> */}
+    <div className="h-full flex flex-col">
+      <style>{scrollbarStyles}</style>
       
-      <div className="px-6 py-2 bg-gray-800 border-t border-gray-700 flex justify-between items-center">
+      <div className="px-3 py-2 bg-black border-b border-gray-700 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
           <span className="text-sm text-gray-300">
@@ -747,7 +770,7 @@ useEffect(() => {
           {thoughts.length > 0 && (
             <button 
               onClick={toggleThinking}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md flex items-center text-sm"
+              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md flex items-center text-xs sm:text-sm"
             >
               <span className="mr-1">{showThinking ? 'Hide' : 'Show'} Thinking</span>
             </button>
@@ -756,7 +779,7 @@ useEffect(() => {
           {!isConnected && !isConnecting && (
             <button 
               onClick={handleReconnect}
-              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md flex items-center"
+              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md flex items-center text-xs sm:text-sm"
             >
               <FiRefreshCw className="mr-1" /> Reconnect
             </button>
@@ -765,62 +788,82 @@ useEffect(() => {
       </div>
       
       <div className="flex flex-1 overflow-hidden">
-        <div 
-          ref={terminalRef}
-          className="flex-1 overflow-y-auto bg-gray-900 text-gray-200 font-mono text-sm px-4"
-        >
-          {error && (
-            <div className="bg-red-900/30 text-red-300 p-4 m-4 rounded-md border-l-4 border-red-500">
-              {error}
+        <div className="flex-1 overflow-hidden relative">
+          <div 
+            ref={terminalRef}
+            className="flex-1 overflow-y-auto bg-black text-gray-200 font-mono text-sm px-3 sm:px-4 terminal-scroll absolute inset-0"
+          >
+            {error && (
+              <div className="bg-red-900/30 text-red-300 p-4 m-2 rounded-md border-l-4 border-red-500">
+                {error}
+              </div>
+            )}
+            
+            {messages.length === 0 && !error && (
+              <div className="p-8 text-center text-gray-500 italic">
+                <FiTerminal className="mx-auto text-4xl mb-2" />
+                <p>Type a command or question to begin</p>
+              </div>
+            )}
+            
+            <div className="space-y-1 py-2 mb-4">
+              {messages.map(renderMessage)}
             </div>
-          )}
-          
-          {messages.length === 0 && !error && (
-            <div className="p-8 text-center text-gray-500 italic">
-              <FiTerminal className="mx-auto text-4xl mb-2" />
-              <p>Type a command or question to begin</p>
-            </div>
-          )}
-          
-          <div className="space-y-1 py-2 mb-4">
-            {messages.map(renderMessage)}
           </div>
+          
+          {/* Fade overlay for main terminal */}
+          <div 
+            className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none" 
+            style={{
+              background: 'linear-gradient(to bottom, rgba(17, 24, 39, 0), rgba(17, 24, 39, 1) 85%)'
+            }}
+          />
         </div>
         
         {thoughts.length > 0 && showThinking && (
-          <div className={`border-l border-gray-700 bg-gray-900 overflow-y-auto flex flex-col ${window.innerWidth < 768 ? 'w-full absolute inset-0 z-10' : 'w-96'}`}>
+          <div className={`border-l border-gray-700 bg-gray-900 overflow-hidden flex flex-col relative ${window.innerWidth < 768 ? 'w-full absolute inset-0 z-10' : 'w-64 md:w-80 lg:w-96'}`}>
             <TerminalHeader title="AI Thinking Terminal" />
-            <div className="flex-1 p-2 font-mono bg-gray-950 overflow-y-auto">
-              {window.innerWidth < 768 && (
-                <button 
-                  onClick={toggleThinking} 
-                  className="absolute top-2 right-2 text-gray-400 hover:text-white z-20"
-                >
-                  ✕
-                </button>
-              )}
-              <div className="opacity-70 text-xs text-gray-500 mb-2">
-                # Terminal session started
-                <br />
-                # AI processing thoughts...
+            <div className="flex-1 relative">
+              <div className="absolute inset-0 p-2 font-mono bg-gray-950 overflow-y-auto terminal-scroll">
+                {window.innerWidth < 768 && (
+                  <button 
+                    onClick={toggleThinking} 
+                    className="absolute top-2 right-2 text-gray-400 hover:text-white z-20"
+                  >
+                    ✕
+                  </button>
+                )}
+                <div className="opacity-70 text-xs text-gray-500 mb-2">
+                  # Terminal session started
+                  <br />
+                  # AI processing thoughts...
+                </div>
+                
+                {thoughts.map((thought, index) => (
+                  <ThoughtBubble 
+                    key={`thought-${index}-${thought.timestamp}`}
+                    content={thought.content}
+                    type={thought.type}
+                    onComplete={null}
+                  />
+                ))}
+                
+                {isThinking && <ThinkingIndicator isVisible={isThinking} />}
               </div>
               
-              {thoughts.map((thought, index) => (
-                <ThoughtBubble 
-                  key={`thought-${index}-${thought.timestamp}`}
-                  content={thought.content}
-                  type={thought.type}
-                  onComplete={null}
-                />
-              ))}
-              
-              {isThinking && <ThinkingIndicator isVisible={isThinking} />}
+              {/* Fade overlay for thinking panel */}
+              <div 
+                className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none" 
+                style={{
+                  background: 'linear-gradient(to bottom, rgba(3, 7, 18, 0), rgba(3, 7, 18, 1) 85%)'
+                }}
+              />
             </div>
           </div>
         )}
       </div>
       
-      <div className="p-4 px-20 border-t border-gray-700">
+      <div className="p-2 md:p-4 md:px-10 lg:px-20 border-t border-gray-700">
         <div className="rounded-2xl bg-[#121212] border border-gray-700/50 overflow-hidden shadow-lg">
           {calendarMode && (
             <div className="bg-purple-900/30 text-purple-300 text-xs px-4 py-1 border-b border-purple-800/50">
@@ -828,7 +871,7 @@ useEffect(() => {
             </div>
           )}
           <textarea
-            className={`w-full bg-transparent border-0 text-gray-200 pt-4 px-6 focus:outline-none resize-none min-h-[20px] max-h-[200px] overflow-y-auto ${calendarMode ? 'border-l-2 border-purple-500' : ''}`}
+            className={`w-full bg-transparent border-0 text-gray-200 pt-3 px-4 focus:outline-none resize-none min-h-[20px] max-h-[200px] overflow-y-auto ${calendarMode ? 'border-l-2 border-purple-500' : ''}`}
             placeholder={calendarMode ? "Describe your event (e.g., 'Meeting with Alex tomorrow at 3pm')..." : "Type a command or question..."}
             value={input}
             onChange={handleInputChange}
@@ -844,10 +887,10 @@ useEffect(() => {
             }}
             disabled={!isConnected || isProcessing}
           />
-          <div className="flex items-center px-6 py-4">
+          <div className="flex items-center px-4 py-3">
             <button 
               onClick={toggleCalendarMode}
-              className={`flex items-center justify-center cursor-pointer px-3 py-1.5 rounded-full border ${
+              className={`flex items-center justify-center cursor-pointer px-2 py-1.5 rounded-full border ${
                 calendarMode 
                   ? 'border-purple-500 text-purple-500 bg-purple-500/10 hover:bg-purple-500/20' 
                   : 'border-white/70 text-white/70 hover:text-white hover:border-white'
@@ -896,9 +939,25 @@ useEffect(() => {
 };
 
 const Command = () => {
+  const location = useLocation();
+  // Set sidebar open only if we're on the dashboard path
+  const [sidebarOpen, setSidebarOpen] = useState(location.pathname === '/analytics');
+  
+  const toggleSidebar = () => {
+    setSidebarOpen(prev => !prev);
+  };
+
   return (
-    <div className="h-screen bg-gray-900">
-      <AITerminal />
+    <div className="h-screen flex flex-col bg-black">
+      <Navbar toggleSidebar={toggleSidebar} />
+      
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar isOpen={sidebarOpen} />
+        
+        <div className="flex-1 overflow-hidden bg-gray-900">
+          <AITerminal />
+        </div>
+      </div>
     </div>
   );
 };

@@ -11,6 +11,8 @@ import Navbar from './components/Navbar';
 import LoginPage from './components/LoginPage';
 import MainDashboard from './pages/dashboard/MainDashboard';
 import Command from './components/dashboard/Command';
+import MultimodalAgent from './components/dashboard/MultimodalAgent';
+import FAQ from './components/dashboard/FAQ';
 import api from './services/api';
 
 // Initialize socket connection
@@ -206,11 +208,17 @@ function App() {
               <Command />
             </ProtectedRoute>
           } />
+          <Route path="/faqs" element={
+            <ProtectedRoute>
+              <FAQ />
+            </ProtectedRoute>
+          } />
           <Route path="/screenshots" element={
             <ProtectedRoute>
               <ScreenshotPanel socket={socket} user={user} />
             </ProtectedRoute>
           } />
+          <Route path="/multimodal-agent" element={<MultimodalAgent />} />
           <Route path="*" element={<Navigate to="/analytics" replace />} />
         </Routes>
       </main>
