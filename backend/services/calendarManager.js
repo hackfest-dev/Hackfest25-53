@@ -12,6 +12,7 @@ const GROQ_API_KEY = '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';
 // Hardcoded Google OAuth credentials
 const GOOGLE_CLIENT_ID = '705005017645-23mgk5cgputruevubrdab7g3qbvg9mdl.apps.googleusercontent.com';
 const GOOGLE_CLIENT_SECRET = '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';
+// Updated redirect URI to match the actual frontend route
 const GOOGLE_REDIRECT_URI = 'http://localhost:3000/api/calendar/oauth2callback';
 
 // Initialize Groq client
@@ -131,7 +132,7 @@ async function setTokens(code) {
 }
 
 // Get upcoming events
-async function getUpcomingEvents(userId, maxResults = 10) {
+async function getUpcomingEvents(userId, maxResults = 10, timeMin = null, timeMax = null) {
   // Get the user's tokens
   if (!userId || !userTokensMap.has(userId)) {
     await authorize(userId);
@@ -143,14 +144,22 @@ async function getUpcomingEvents(userId, maxResults = 10) {
   
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
   
-  const now = new Date();
-  const response = await calendar.events.list({
+  const now = timeMin ? new Date(timeMin) : new Date();
+  
+  const queryParams = {
     calendarId: CALENDAR_ID,
     timeMin: now.toISOString(),
     maxResults,
     singleEvents: true,
     orderBy: 'startTime',
-  });
+  };
+  
+  // Add timeMax if provided
+  if (timeMax) {
+    queryParams.timeMax = new Date(timeMax).toISOString();
+  }
+  
+  const response = await calendar.events.list(queryParams);
   
   const events = response.data.items;
   if (!events || events.length === 0) {
@@ -162,7 +171,7 @@ async function getUpcomingEvents(userId, maxResults = 10) {
   events.forEach((event, i) => {
     const start = event.start.dateTime || event.start.date;
     const end = event.end.dateTime || event.end.date;
-    console.log(`${i + 1}. ${event.summary} (${start} to ${end}`);
+    console.log(`${i + 1}. ${event.summary} (${start} to ${end})`);
   });
   
   return events;

@@ -14,32 +14,31 @@ const TotalTimeSpent = ({ data, isTracking, onToggleTracking }) => {
     <div className="flex flex-col w-full bg-[#121212] rounded-lg overflow-hidden h-full"
       style={{
         border: '0.5px solid #4B5563',
-        borderBottom: 'none',
+        borderBottom: '0.5px solid #4B5563',
       }}>
       <div className="text-gray-300 text-sm font-medium pb-2 px-4 pt-3 bg-[#1C1B23]">WORK HOURS</div>
       
-      <div className="flex flex-col items-center justify-center flex-grow px-4 py-6">
+      <div className="flex flex-col items-center justify-center flex-grow px-2 py-2">
         <div className="text-sm text-gray-400 mb-2">Total time worked</div>
         <div className="text-4xl font-bold mb-4">{stats.hours}h {stats.minutes}m</div>
         
-        {/* Tracking status and control */}
-        <div className="w-full mt-4 flex flex-col items-center">
-          <div className={`flex items-center ${isTracking ? 'text-green-500' : 'text-red-500'} mb-2`}>
-            <div className={`w-2 h-2 rounded-full mr-2 ${isTracking ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            Tracking: {isTracking ? 'ON' : 'OFF'}
-          </div>
-          
-          <button 
-            onClick={onToggleTracking}
-            className={`px-4 py-2 rounded text-sm w-full ${
-              isTracking 
-                ? 'bg-red-700 text-white hover:bg-red-600' 
-                : 'bg-green-700 text-white hover:bg-green-600'
-            }`}
-          >
-            {isTracking ? 'Disable Tracking' : 'Enable Tracking'}
-          </button>
-        </div>
+   {/* Tracking status and control */}
+<div className="w-full bg-black text-gray-400 p-2 py-1 rounded flex justify-between items-center">
+  <div className="flex flex-col">
+    <div className="flex items-center">
+      <span>Tracking:</span>
+      <span className="ml-1 text-gray-300">On</span>
+    </div>
+  </div>
+  
+  <button 
+    onClick={onToggleTracking}
+    className="px-3 py-1 rounded-full bg-[#3A3A47] text-white hover:bg-[#45455A] transition-colors text-xs"
+  >
+    Disable Tracking
+  </button>
+</div>
+
       </div>
     </div>
   );

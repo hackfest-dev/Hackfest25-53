@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Route, Routes, Navigate, useNavigate } from 'react-router-dom';
+import { Route, Routes, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, logOut } from './services/firebase';
+import { auth, logOut, getGoogleToken } from './services/firebase';
 import Dashboard from './components/Dashboard';
 import WhatsappControl from './components/WhatsappControl';
 import CommandPanel from './components/CommandPanel';
@@ -19,15 +19,46 @@ const socket = io('http://localhost:3000');
 const ProtectedRoute = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      if (currentUser) {
+        try {
+          // Get token and set it in API
+          const token = await currentUser.getIdToken();
+          api.setAuthToken(token);
+          
+          // Get Google token for Calendar API
+          const googleToken = getGoogleToken();
+          if (googleToken) {
+            // Inform backend about Google token for Calendar integration
+            try {
+              await api.post('/calendar/set-google-token', { 
+                googleToken,
+                userInfo: {
+                  sub: currentUser.uid,
+                  email: currentUser.email
+                }
+              });
+              console.log('Google token sent to backend for Calendar API');
+            } catch (err) {
+              console.warn('Error setting Google token in backend:', err);
+            }
+          }
+        } catch (err) {
+          console.error('Error setting up auth token:', err);
+        }
+      }
+      
       setLoading(false);
     });
     
     return () => unsubscribe();
-  }, []);
+  }, [navigate]);
   
   if (loading) {
     return (
@@ -38,7 +69,9 @@ const ProtectedRoute = ({ children }) => {
   }
   
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Save the attempted URL for redirecting after login
+    const redirectUrl = location.pathname !== '/login' ? location.pathname : '/analytics';
+    return <Navigate to={`/login?redirect=${encodeURIComponent(redirectUrl)}`} replace />;
   }
   
   return children;
@@ -50,6 +83,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Check authentication state
@@ -144,49 +178,21 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-900 text-gray-100">
-      {user && (
-        <header className="bg-gray-800 border-b border-gray-700 shadow-md px-6">
-          {/* <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-indigo-400">WhatsApp Bot Platform</h1>
-            <div className="flex items-center space-x-4">
-              <div className="connection-status">
-                <span className={`px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-                  {isConnected ? 'Connected to Backend' : 'Disconnected'}
-                </span>
-              </div>
-              <div className="user-profile flex items-center space-x-2">
-                <img 
-                  src={user.photoURL || 'https://via.placeholder.com/32'} 
-                  alt={user.displayName || 'User'} 
-                  className="w-8 h-8 rounded-full"
-                />
-                <span className="text-sm text-gray-300">{user.displayName || user.email}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded transition-colors duration-200"
-              >
-                Logout
-              </button>
-            </div>
-          </div> */}
-        </header>
-      )}
-
-      {/* {user && <Navbar user={user} />} */}
+    <div className="flex flex-col min-h-screen bg-black text-gray-100">
+      {user && <Navbar user={user} isConnected={isConnected} onLogout={handleLogout} />}
 
       <main className="flex-grow">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Dashboard socket={socket} user={user} />
-            </ProtectedRoute>
-          } />
+          <Route path="/" element={<Navigate to="/analytics" replace />} />
           <Route path="/analytics" element={
             <ProtectedRoute>
               <MainDashboard user={user} />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard socket={socket} user={user} />
             </ProtectedRoute>
           } />
           <Route path="/whatsapp" element={
@@ -204,7 +210,7 @@ function App() {
               <ScreenshotPanel socket={socket} user={user} />
             </ProtectedRoute>
           } />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/analytics" replace />} />
         </Routes>
       </main>
 

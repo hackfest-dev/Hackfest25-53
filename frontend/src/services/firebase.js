@@ -20,6 +20,11 @@ const googleProvider = new GoogleAuthProvider();
 
 // Add calendar-related scopes for Google Auth
 googleProvider.addScope('https://www.googleapis.com/auth/calendar');
+googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+// Force selection of account on each login to avoid scope issues
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 // Authentication functions
 const signInWithGoogle = async () => {
@@ -33,6 +38,13 @@ const signInWithGoogle = async () => {
     // Store the user's Google access token in localStorage for use with Calendar API
     localStorage.setItem('googleAccessToken', token);
     
+    // Also store credential info
+    const tokenData = {
+      access_token: token,
+      id_token: credential.idToken
+    };
+    localStorage.setItem('googleTokenData', JSON.stringify(tokenData));
+    
     return { user, token };
   } catch (error) {
     console.error("Error signing in with Google:", error);
@@ -40,10 +52,25 @@ const signInWithGoogle = async () => {
   }
 };
 
+// Get the Google token for Calendar API
+const getGoogleToken = () => {
+  try {
+    const tokenData = localStorage.getItem('googleTokenData');
+    if (tokenData) {
+      return JSON.parse(tokenData);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting Google token:", error);
+    return null;
+  }
+};
+
 const logOut = async () => {
   try {
     await signOut(auth);
     localStorage.removeItem('googleAccessToken');
+    localStorage.removeItem('googleTokenData');
   } catch (error) {
     console.error("Error signing out:", error);
     throw error;
@@ -96,5 +123,6 @@ export {
   logOut, 
   saveCommandToFirestore, 
   getCommandHistory,
-  googleProvider 
+  googleProvider,
+  getGoogleToken
 };

@@ -1,84 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { auth, signInWithGoogle } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { auth, signInWithGoogle } from '../services/firebase';
 
 function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [message, setMessage] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Get the redirect URL from query params, default to /analytics
+  const getRedirectUrl = () => {
+    const params = new URLSearchParams(location.search);
+    const redirect = params.get('redirect');
+    return redirect || '/analytics';
+  };
 
   useEffect(() => {
-    // Check if user was redirected here after logout
-    if (location.state?.from === 'logout') {
-      setMessage('You have been successfully logged out.');
-    }
-    
+    // Check if user is already logged in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is already signed in, redirect to dashboard
-        navigate('/');
+        navigate(getRedirectUrl(), { replace: true });
       }
     });
-
+    
     return () => unsubscribe();
-  }, [navigate, location]);
+  }, [navigate, location.search]);
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setError(null);
-    
     try {
-      const { token } = await signInWithGoogle();
-      console.log('Successfully signed in with Google');
-      
-      // Call backend to validate token and setup calendar authorization
-      const response = await fetch('http://localhost:3000/api/auth/google', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ token })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        console.log('Backend auth successful:', data.message);
-        navigate('/');
-      } else {
-        throw new Error(data.error || 'Failed to authenticate with backend');
-      }
+      setLoading(true);
+      setError(null);
+      await signInWithGoogle();
+      // Navigation will happen in the useEffect
     } catch (error) {
-      console.error('Authentication error:', error);
-      setError(error.message || 'An error occurred during sign in');
+      console.error("Login failed:", error);
+      setError("Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900">
-      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-xl">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-indigo-400">
-            WhatsApp Bot Platform
-          </h1>
-          <p className="mt-2 text-sm text-gray-400">
-            Sign in to access your bot control panel
-          </p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="max-w-md w-full bg-gray-800 rounded-lg shadow-lg p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-indigo-400 mb-2">Axentis</h1>
+          <p className="text-gray-400">Sign in to access your dashboard</p>
         </div>
         
-        {message && (
-          <div className="p-4 mb-4 text-sm text-green-400 bg-green-900/30 rounded-lg">
-            {message}
-          </div>
-        )}
-        
         {error && (
-          <div className="p-4 mb-4 text-sm text-red-400 bg-red-900/30 rounded-lg">
+          <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 mb-6 rounded">
             {error}
           </div>
         )}
@@ -86,31 +58,33 @@ function LoginPage() {
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="flex items-center justify-center w-full px-4 py-3 space-x-2 text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`w-full flex items-center justify-center space-x-2 bg-white text-gray-800 p-3 rounded-md font-medium ${
+            loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-gray-200'
+          }`}
         >
           {loading ? (
-            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+            <>
+              <div className="w-5 h-5 border-t-2 border-b-2 border-gray-800 rounded-full animate-spin"></div>
+              <span>Signing in...</span>
+            </>
           ) : (
             <>
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
-                  fill="currentColor"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#EA4335"
+                  d="M5.26620003,9.76452941 C6.19878754,6.93863203 8.85444915,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.50909091 16.4181818,6.49090909 L19.9090909,3 C17.7818182,1.14545455 15.0545455,0 12,0 C7.27006974,0 3.1977497,2.69829785 1.23999023,6.65002441 L5.26620003,9.76452941 Z"
                 />
                 <path
-                  fill="currentColor"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                  d="M16.0407269,18.0125889 C14.9509167,18.7163016 13.5660892,19.0909091 12,19.0909091 C8.86648613,19.0909091 6.21911939,17.076871 5.27698177,14.2678769 L1.23746264,17.3349879 C3.19279051,21.2936293 7.26500293,24 12,24 C14.9328362,24 17.7353462,22.9573905 19.834192,20.9995801 L16.0407269,18.0125889 Z"
                 />
                 <path
-                  fill="currentColor"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  fill="#4A90E2"
+                  d="M19.834192,20.9995801 C22.0291676,18.9520994 23.4545455,15.903663 23.4545455,12 C23.4545455,11.2909091 23.3454545,10.5272727 23.1818182,9.81818182 L12,9.81818182 L12,14.4545455 L18.4363636,14.4545455 C18.1187732,16.013626 17.2662994,17.2212117 16.0407269,18.0125889 L19.834192,20.9995801 Z"
                 />
                 <path
-                  fill="currentColor"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  fill="#FBBC05"
+                  d="M5.27698177,14.2678769 C5.03832634,13.556323 4.90909091,12.7937589 4.90909091,12 C4.90909091,11.2182781 5.03443647,10.4668121 5.26620003,9.76452941 L1.23999023,6.65002441 C0.43658717,8.26043162 0,10.0753848 0,12 C0,13.9195484 0.444780743,15.7301709 1.23746264,17.3349879 L5.27698177,14.2678769 Z"
                 />
               </svg>
               <span>Sign in with Google</span>
@@ -118,10 +92,8 @@ function LoginPage() {
           )}
         </button>
         
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-400">
-            By signing in, you agree to our Terms of Service and Privacy Policy
-          </p>
+        <div className="mt-6 text-center text-sm text-gray-500">
+          By signing in, you agree to our terms and conditions.
         </div>
       </div>
     </div>

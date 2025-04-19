@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
 
 /**
  * API service for interacting with the backend
@@ -11,18 +12,20 @@ const API_URL = process.env.NODE_ENV === 'production'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-let authToken = null;
+let currentToken = null;
 
 // Add a request interceptor to attach the auth token to every request
 api.interceptors.request.use(
   (config) => {
-    if (authToken) {
-      config.headers['Authorization'] = `Bearer ${authToken}`;
+    const token = currentToken;
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
   },
@@ -45,12 +48,25 @@ api.interceptors.response.use(
   }
 );
 
+// Method to set the auth token
 const setAuthToken = (token) => {
-  authToken = token;
+  currentToken = token;
 };
 
+// Method to clear the auth token
 const clearAuthToken = () => {
-  authToken = null;
+  currentToken = null;
+};
+
+// Method to get the decoded token for user info
+const getDecodedToken = () => {
+  if (!currentToken) return null;
+  try {
+    return jwtDecode(currentToken);
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return null;
+  }
 };
 
 /**
@@ -106,6 +122,7 @@ export default {
   patch: (url, data, config = {}) => api.patch(url, data, config),
   setAuthToken,
   clearAuthToken,
+  getDecodedToken,
   toggleTracking,
   getTrackingStatus,
 };

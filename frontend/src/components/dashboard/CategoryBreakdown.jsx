@@ -13,12 +13,21 @@ const CategoryBreakdown = ({ data }) => {
       return acc;
     }, {});
     
-    // Generate random colors for each category
-    const colors = Object.keys(categoryCount).map(() => {
-      const r = Math.floor(Math.random() * 155) + 100;
-      const g = Math.floor(Math.random() * 155) + 100;
-      const b = Math.floor(Math.random() * 155) + 100;
-      return `rgba(${r}, ${g}, ${b}, 0.8)`;
+    // Generate dark purple-themed colors for each category
+    const colors = Object.keys(categoryCount).map((_, index) => {
+      // Create different shades of purple that work on dark backgrounds
+      const purpleShades = [
+        'rgba(149, 128, 255, 0.7)',
+        'rgba(128, 90, 213, 0.7)',
+        'rgba(168, 130, 255, 0.7)',
+        'rgba(106, 90, 205, 0.7)',
+        'rgba(138, 118, 223, 0.7)',
+        'rgba(122, 104, 220, 0.7)',
+        'rgba(147, 112, 219, 0.7)',
+        'rgba(154, 136, 255, 0.7)',
+      ];
+      
+      return purpleShades[index % purpleShades.length];
     });
     
     return {
@@ -27,7 +36,7 @@ const CategoryBreakdown = ({ data }) => {
         {
           data: Object.values(categoryCount),
           backgroundColor: colors,
-          borderColor: colors.map(color => color.replace('0.8', '1')),
+          borderColor: '#0A0A0A',
           borderWidth: 1,
         },
       ],
@@ -41,18 +50,19 @@ const CategoryBreakdown = ({ data }) => {
       legend: {
         position: 'right',
         labels: {
-          color: '#d1d5db',
+          color: '#9e9e9e',
           font: {
             size: 12
           },
-          padding: 20
+          padding: 20,
+          boxWidth: 15
         }
       },
       tooltip: {
-        backgroundColor: 'rgba(31, 41, 55, 0.8)',
-        titleColor: '#f3f4f6',
-        bodyColor: '#e5e7eb',
-        borderColor: 'rgba(107, 114, 128, 0.3)',
+        backgroundColor: 'rgba(20, 20, 20, 0.95)',
+        titleColor: '#d1d1d1',
+        bodyColor: '#b0b0b0',
+        borderColor: 'rgba(70, 70, 70, 0.3)',
         borderWidth: 1,
         padding: 12,
         displayColors: true,
@@ -66,18 +76,33 @@ const CategoryBreakdown = ({ data }) => {
           }
         }
       }
+    },
+    cutout: '40%',
+    elements: {
+      arc: {
+        borderWidth: 1,
+        borderColor: '#0A0A0A'
+      }
     }
   };
   
   return (
-    <div className="h-64">
-      {data.length > 0 ? (
-        <Pie data={chartData} options={options} />
-      ) : (
-        <div className="h-full flex items-center justify-center text-gray-500">
-          No category data available
-        </div>
-      )}
+    <div className="bg-[#121212] text-gray-300 relative rounded-lg overflow-hidden h-full flex flex-col"
+    style={{
+      border: '0.5px solid #4B5563',
+    }}>
+      <div className="text-gray-300 text-sm font-medium pb-2 px-4 pt-3 bg-[#1C1B23] rounded-t-lg">CATEGORY BREAKDOWN</div>
+      <div className="flex-1 flex items-center justify-center px-4">
+        {data.length > 0 ? (
+          <div className="w-full h-full flex items-center justify-center" style={{ maxHeight: "calc(100% - 60px)" }}>
+            <Pie data={chartData} options={options} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-600">
+            No category data available
+          </div>
+        )}
+      </div>
     </div>
   );
 };

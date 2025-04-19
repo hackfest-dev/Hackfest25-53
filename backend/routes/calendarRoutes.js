@@ -64,7 +64,19 @@ router.post('/oauth2callback', async (req, res) => {
 router.get('/events', authController.verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const events = await calendarManager.getUpcomingEvents(userId);
+    
+    // Set the time range for the next 7 days
+    const now = new Date();
+    const sevenDaysLater = new Date();
+    sevenDaysLater.setDate(now.getDate() + 7);
+    
+    const events = await calendarManager.getUpcomingEvents(
+      userId, 
+      10,  // maxResults
+      now.toISOString(), 
+      sevenDaysLater.toISOString()
+    );
+    
     if (!events || events.length === 0) {
       return res.json({ 
         success: true, 
@@ -134,6 +146,42 @@ router.post('/events/natural', authController.verifyToken, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+});
+
+// Route to set Google tokens directly from Firebase auth
+router.post('/set-google-token', authController.verifyToken, async (req, res) => {
+  try {
+    const { googleToken, userInfo } = req.body;
+    
+    if (!googleToken || !userInfo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Google token and user info are required'
+      });
+    }
+    
+    // Verify the user ID from the token matches the authenticated user
+    if (userInfo.sub !== req.user.uid) {
+      return res.status(403).json({
+        success: false,
+        error: 'User ID mismatch'
+      });
+    }
+    
+    // Set the Google tokens in the calendar manager
+    await calendarManager.setGoogleTokens(googleToken, userInfo);
+    
+    res.json({
+      success: true,
+      message: 'Google Calendar tokens set successfully'
+    });
+  } catch (error) {
+    console.error('Error setting Google tokens:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

@@ -14,7 +14,7 @@ const Sidebar = ({ isOpen }) => {
   ];
   
   return (
-    <div className={`bg-gray-800 border-r border-gray-700 transition-all duration-300 ${isOpen ? 'w-64' : 'w-20'}`}>
+    <div className={`bg-black border-r border-gray-700 transition-all duration-300 ${isOpen ? 'w-64' : 'w-20'}`}>
       <div className="py-4 overflow-y-auto">
         <ul className="space-y-2 px-3">
           {menuItems.map((item) => (
