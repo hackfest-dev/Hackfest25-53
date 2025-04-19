@@ -48,17 +48,10 @@ const CategoryBreakdown = ({ data }) => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'right',
-        labels: {
-          color: '#9e9e9e',
-          font: {
-            size: 12
-          },
-          padding: 20,
-          boxWidth: 15
-        }
+        display: false, // Hide the legend completely
       },
       tooltip: {
+        enabled: true, // Ensure tooltips are enabled
         backgroundColor: 'rgba(20, 20, 20, 0.95)',
         titleColor: '#d1d1d1',
         bodyColor: '#b0b0b0',
@@ -67,12 +60,15 @@ const CategoryBreakdown = ({ data }) => {
         padding: 12,
         displayColors: true,
         callbacks: {
+          title: function(tooltipItems) {
+            return tooltipItems[0].label; // Make sure the category name appears as title
+          },
           label: function(context) {
             const label = context.label || '';
             const value = context.raw || 0;
             const total = context.dataset.data.reduce((a, b) => a + b, 0);
             const percentage = ((value / total) * 100).toFixed(1);
-            return `${label}: ${value} (${percentage}%)`;
+            return `${value} activities (${percentage}%)`;
           }
         }
       }
