@@ -10,6 +10,7 @@ import ScreenshotPanel from './components/ScreenshotPanel';
 import Navbar from './components/Navbar';
 import LoginPage from './components/LoginPage';
 import MainDashboard from './pages/dashboard/MainDashboard';
+import Command from './components/dashboard/Command';
 import api from './services/api';
 
 // Initialize socket connection
@@ -202,7 +203,7 @@ function App() {
           } />
           <Route path="/commands" element={
             <ProtectedRoute>
-              <CommandPanel socket={socket} user={user} />
+              <Command />
             </ProtectedRoute>
           } />
           <Route path="/screenshots" element={
