@@ -367,16 +367,13 @@ const DashboardContent = React.memo(() => {
             </div>
             
             <div className="flex flex-row gap-6 mt-6">
-              <div className="w-1/2 bg-[#121212] rounded-lg shadow-lg ">
+              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <ActivityLogWrapper />
               </div>
-              <div className="w-1/2 bg-[#121212] rounded-lg shadow-lg">
+              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <CategoryBreakdownWrapper />
               </div>
-            </div>
-            
-            <div className="mt-6">
-              <div className="bg-[#121212] rounded-lg shadow-lg h-[350px]">
+              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <UpcomingEvents />
               </div>
             </div>

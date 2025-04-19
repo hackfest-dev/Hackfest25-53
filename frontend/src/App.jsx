@@ -179,7 +179,7 @@ function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-black text-gray-100">
-      {user && <Navbar user={user} isConnected={isConnected} onLogout={handleLogout} />}
+      {/* {user && <Navbar user={user} isConnected={isConnected} onLogout={handleLogout} />} */}
 
       <main className="flex-grow">
         <Routes>
