@@ -129,24 +129,42 @@ async function textToSpeech(text) {
   }
 }
 
-// Speech-to-Text with Whisper (unchanged)
+// Speech-to-Text with Whisper - updated to match bot.cjs implementation
 async function transcribeAudio(buffer) {
   const fs = require('fs').promises;
   const path = require('path');
   const { execSync } = require('child_process');
   
   try {
+    logger.info('Starting audio transcription');
+    
+    // Validate input
+    if (!buffer || !Buffer.isBuffer(buffer)) {
+      logger.error('Invalid input buffer for transcription');
+      throw new Error('Invalid input buffer for transcription');
+    }
+    
+    logger.info(`Received ${buffer.length} bytes of audio data`);
+    
     const tempDir = path.join(__dirname, '..', 'tmp');
     await fs.mkdir(tempDir, { recursive: true });
 
-    const inputFile = path.join(tempDir, `input_${Date.now()}.webm`);
-    const wavFile = path.join(tempDir, `audio_${Date.now()}.wav`);
-    const outputFile = path.join(tempDir, `audio_${Date.now()}.txt`);
+    const timestamp = Date.now();
+    const audioFilename = `audio_${timestamp}`;
+    const inputFile = path.join(tempDir, `input_${timestamp}.webm`);
+    const wavFile = path.join(tempDir, `${audioFilename}.wav`);
+    
+    // Important: Whisper will create an output file based on the input filename
+    // The actual output file will be named with the base name of the input WAV file
+    // For example: if input is "audio_12345.wav", output will be "audio_12345.txt"
+    const expectedOutputFile = path.join(tempDir, `${audioFilename}.txt`);
 
     // Write input file using promises
     await fs.writeFile(inputFile, buffer);
+    logger.info(`Audio file written to ${inputFile}`);
 
     // Convert to WAV format
+    logger.info('Converting audio to WAV format');
     await new Promise((resolve, reject) => {
       require('fluent-ffmpeg')(inputFile)
         .audioFrequency(16000)
@@ -154,24 +172,99 @@ async function transcribeAudio(buffer) {
         .format('wav')
         .save(wavFile)
         .on('end', resolve)
-        .on('error', reject);
+        .on('error', (err) => {
+          logger.error('ffmpeg error:', err);
+          reject(err);
+        });
     });
 
-    // Transcribe using Whisper
-    execSync(`whisper "${wavFile}" --model small --output_format txt --output_dir "${tempDir}"`);
-
-    // Read and clean up files
-    const result = await fs.readFile(outputFile, 'utf-8');
-    await Promise.all([
-      fs.unlink(inputFile),
-      fs.unlink(wavFile),
-      fs.unlink(outputFile)
-    ]);
-
-    return result.trim();
+    // Direct approach: attempt to transcribe using Whisper without pre-checking
+    try {
+      logger.info(`Transcribing audio with Whisper: ${wavFile}`);
+      
+      // Run whisper command
+      execSync(`whisper "${wavFile}" --model small --output_format txt --output_dir "${tempDir}"`);
+      
+      // Check if the output file exists
+      let outputExists = false;
+      try {
+        await fs.access(expectedOutputFile);
+        outputExists = true;
+      } catch (accessError) {
+        logger.warn(`Expected output file not found at: ${expectedOutputFile}`);
+        // Try an alternative filename pattern that Whisper might have used
+        const alternativeOutputFile = path.join(tempDir, `${path.basename(wavFile)}.txt`);
+        logger.info(`Trying alternative output file: ${alternativeOutputFile}`);
+        
+        try {
+          await fs.access(alternativeOutputFile);
+          logger.info(`Found output at alternative location: ${alternativeOutputFile}`);
+          // If we found the file at the alternative location, update our expected path
+          outputExists = true;
+          // Update the expected output file path to the alternative one we found
+          expectedOutputFile = alternativeOutputFile;
+        } catch (altAccessError) {
+          // Neither file exists
+          logger.error(`Output file not found at either expected location`);
+        }
+      }
+      
+      if (!outputExists) {
+        // Look for any txt files in the temp directory that could match our output
+        const dirFiles = await fs.readdir(tempDir);
+        const txtFiles = dirFiles.filter(f => f.endsWith('.txt') && f.includes(audioFilename));
+        
+        if (txtFiles.length > 0) {
+          // Use the first matching txt file we find
+          const foundFile = txtFiles[0];
+          logger.info(`Found potential output file: ${foundFile}`);
+          expectedOutputFile = path.join(tempDir, foundFile);
+          outputExists = true;
+        } else {
+          throw new Error('Whisper ran but no output file was found');
+        }
+      }
+      
+      // If we get here, Whisper executed successfully and we found an output file
+      logger.info(`Reading transcription result from: ${expectedOutputFile}`);
+      const result = await fs.readFile(expectedOutputFile, 'utf-8');
+      
+      // Clean up files
+      try {
+        await Promise.all([
+          fs.unlink(inputFile),
+          fs.unlink(wavFile),
+          fs.unlink(expectedOutputFile)
+        ]);
+        logger.info('Temporary files cleaned up successfully');
+      } catch (cleanupError) {
+        logger.warn(`File cleanup error: ${cleanupError.message}`);
+      }
+      
+      return result.trim();
+    } catch (whisperError) {
+      // Whisper failed - check if it's because it's not installed
+      logger.error('Whisper execution failed:', whisperError.message);
+      
+      if (whisperError.message.includes('not found') || 
+          whisperError.message.includes('command not found') || 
+          whisperError.message.includes('No such file or directory')) {
+        throw new Error('Whisper AI is not installed on the server. Please install Whisper AI to enable audio transcription.');
+      } else {
+        throw new Error(`Whisper transcription error: ${whisperError.message}`);
+      }
+    }
   } catch (error) {
-    logger.error("Local transcription error:", error);
-    throw new Error("Transcription failed: " + error.message);
+    logger.error("Transcription error:", error);
+    
+    // Return a user-friendly error message
+    if (error.message.includes('Whisper AI is not installed')) {
+      return 'Error: Whisper AI is not installed on the server. Please check the installation guide in the documentation.';
+    } else if (error.message.includes('ffmpeg')) {
+      return 'Error: Could not convert audio format. Please check if ffmpeg is installed.';
+    } else {
+      return `Transcription failed: ${error.message}`;
+    }
   }
 }
 

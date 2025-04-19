@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { saveCommandToFirestore, getCommandHistory } from '../services/firebase';
 
@@ -11,6 +11,11 @@ function CommandPanel({ user }) {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('execute');
   const [loadingHistory, setLoadingHistory] = useState(true);
+  
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -253,6 +258,109 @@ function CommandPanel({ user }) {
     window.open(url, '_blank');
   };
 
+  const startRecording = async () => {
+    try {
+      setError(null);
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.addEventListener('dataavailable', event => {
+        audioChunksRef.current.push(event.data);
+      });
+      
+      mediaRecorder.addEventListener('stop', handleAudioStop);
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      setError('Microphone access denied or not available');
+      console.error('Error accessing microphone:', error);
+    }
+  };
+  
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+  
+  const handleAudioStop = async () => {
+    try {
+      setIsTranscribing(true);
+      
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      console.log(`Audio recorded: ${audioBlob.size} bytes`);
+      
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      
+      reader.onloadend = async () => {
+        try {
+          const base64Audio = reader.result.split(',')[1];
+          console.log(`Base64 audio data length: ${base64Audio.length} characters`);
+          
+          // Simple validation
+          if (!base64Audio || base64Audio.length < 100) {
+            throw new Error('Audio recording too short or empty');
+          }
+          
+          console.log('Calling transcription API...');
+          
+          const response = await api.post('/ai/transcribe', { audio: base64Audio });
+          
+          console.log('Transcription API response:', response.data);
+          
+          if (response.data.success) {
+            if (activeTab === 'execute') {
+              setCommand(response.data.text);
+            } else {
+              setTask(response.data.text);
+            }
+          } else {
+            // Show more helpful error if it's a Whisper installation issue
+            if (response.data.error && response.data.error.includes('Whisper AI is not installed')) {
+              setError(
+                'Whisper AI is not installed on the server. Please check the installation guide in the docs folder.'
+              );
+            } else {
+              setError('Failed to transcribe audio: ' + response.data.error);
+            }
+          }
+        } catch (error) {
+          console.error('Transcription API error details:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            endpoint: '/ai/transcribe',
+            message: error.message
+          });
+          
+          // Handle Whisper installation errors specifically
+          if (error.response?.data?.error?.includes('Whisper AI is not installed')) {
+            setError(
+              'Speech recognition requires Whisper AI to be installed on the server. Please check the installation guide in the docs folder.'
+            );
+          } else {
+            setError('Error transcribing audio: ' + (error.response?.data?.error || error.message));
+          }
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+    } catch (error) {
+      console.error('Audio processing error:', error);
+      setError('Error processing audio: ' + error.message);
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <div className="bg-gray-900 text-gray-100 min-h-screen p-6">
       <h1 className="text-3xl font-bold text-indigo-400 mb-6">Command Panel</h1>
@@ -288,15 +396,50 @@ function CommandPanel({ user }) {
                   <label htmlFor="command" className="block text-sm font-medium text-gray-300 mb-2">
                     Command
                   </label>
-                  <input
-                    type="text"
-                    id="command"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="Enter system command..."
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    disabled={loading}
-                  />
+                  <div className="flex">
+                    <input
+                      type="text"
+                      id="command"
+                      className="flex-grow bg-gray-700 border border-gray-600 rounded-l-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      placeholder="Enter system command..."
+                      value={command}
+                      onChange={(e) => setCommand(e.target.value)}
+                      disabled={loading || isRecording || isTranscribing}
+                    />
+                    <button
+                      type="button"
+                      className={`px-4 py-2 rounded-r-md ${isRecording 
+                        ? 'bg-red-600 text-white animate-pulse' 
+                        : isTranscribing 
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-gray-600 text-gray-200 hover:bg-gray-500'}`}
+                      onClick={isRecording ? stopRecording : startRecording}
+                      disabled={loading || isTranscribing}
+                      title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Record voice command"}
+                    >
+                      {isRecording ? (
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-red-300 rounded-full mr-2"></span>
+                          Stop
+                        </span>
+                      ) : isTranscribing ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Processing...
+                        </span>
+                      ) : (
+                        <span className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                          Mic
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {error && <div className="mb-4 text-red-400 bg-red-900/30 p-3 rounded-md">{error}</div>}
@@ -304,7 +447,7 @@ function CommandPanel({ user }) {
                 <button
                   type="submit"
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md shadow transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={loading || isRecording || isTranscribing}
                 >
                   {loading ? 'Executing...' : 'Execute Command'}
                 </button>
@@ -322,14 +465,49 @@ function CommandPanel({ user }) {
                   <label htmlFor="task" className="block text-sm font-medium text-gray-300 mb-2">
                     Task Description
                   </label>
-                  <textarea
-                    id="task"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
-                    placeholder="Describe what you want to do..."
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    disabled={loading}
-                  />
+                  <div className="flex">
+                    <textarea
+                      id="task"
+                      className="flex-grow bg-gray-700 border border-gray-600 rounded-l-md py-2 px-4 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent min-h-[120px]"
+                      placeholder="Describe what you want to do..."
+                      value={task}
+                      onChange={(e) => setTask(e.target.value)}
+                      disabled={loading || isRecording || isTranscribing}
+                    />
+                    <button
+                      type="button"
+                      className={`px-4 self-stretch rounded-r-md ${isRecording 
+                        ? 'bg-red-600 text-white animate-pulse' 
+                        : isTranscribing 
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-gray-600 text-gray-200 hover:bg-gray-500'}`}
+                      onClick={isRecording ? stopRecording : startRecording}
+                      disabled={loading || isTranscribing}
+                      title={isRecording ? "Stop recording" : isTranscribing ? "Transcribing..." : "Record voice command"}
+                    >
+                      {isRecording ? (
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-red-300 rounded-full mr-2"></span>
+                          Stop
+                        </span>
+                      ) : isTranscribing ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Processing...
+                        </span>
+                      ) : (
+                        <span className="flex flex-col items-center justify-center h-full">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                          Mic
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {error && <div className="mb-4 text-red-400 bg-red-900/30 p-3 rounded-md">{error}</div>}
@@ -337,7 +515,7 @@ function CommandPanel({ user }) {
                 <button
                   type="submit"
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md shadow transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
+                  disabled={loading || isRecording || isTranscribing}
                 >
                   {loading ? 'Generating...' : 'Generate & Execute Command'}
                 </button>

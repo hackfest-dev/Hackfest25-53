@@ -23,6 +23,12 @@ let currentToken = null;
 // Add a request interceptor to attach the auth token to every request
 api.interceptors.request.use(
   (config) => {
+    // Log outgoing requests to help with debugging
+    console.log(`API Request: ${config.method.toUpperCase()} ${config.baseURL}${config.url}`, {
+      hasToken: !!currentToken,
+      headers: config.headers
+    });
+    
     const token = currentToken;
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
@@ -40,6 +46,15 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Provide more detailed error logging
+    console.error('API Error:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
+    
     if (error.response && error.response.status === 401) {
       console.error('Authentication error: User not authorized');
       // Optionally trigger logout or redirect to login page
