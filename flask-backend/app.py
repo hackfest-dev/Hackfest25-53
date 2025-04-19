@@ -1,6 +1,7 @@
 import os
 from autogen import GroupChat, GroupChatManager, register_function
 from flask import Flask
+from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -12,7 +13,13 @@ from tools import execute_command, generate_command, open_youtube_video
 
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=["http://localhost:5173"],
+    logger=True,
+    engineio_logger=True
+)
 WATCHED_FILE = os.path.abspath(
     os.path.join(os.path.dirname(__file__),
                  "../scripts/logs\categorized_log.json")
