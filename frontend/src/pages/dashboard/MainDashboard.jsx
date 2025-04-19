@@ -340,12 +340,12 @@ const DashboardContent = React.memo(() => {
         
         <main className="flex-1 overflow-y-auto p-4">
           <div className="space-y-6">
-            <StatusDisplay 
+            {/* <StatusDisplay 
               lastUpdated={lastUpdated} 
               isRefreshing={isRefreshing}
               onRefresh={refreshData}
               nextRefresh={nextRefreshDisplay}
-            />
+            /> */}
             
             {/* Daily Tip component */}
             <div className="mt-4">
