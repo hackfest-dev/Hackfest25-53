@@ -259,6 +259,7 @@ const AITerminal = () => {
   const [isThinking, setIsThinking] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
   const [calendarMode, setCalendarMode] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   
   const socketRef = useRef(null);
   const terminalRef = useRef(null);
@@ -482,6 +483,14 @@ const AITerminal = () => {
   };
   
   const addMessage = (message) => {
+    // Don't add welcome messages if user has already interacted with the terminal
+    if (hasUserInteracted && 
+        message.type === 'system' && 
+        (message.content === 'Connected to AI Terminal Agent' || 
+         message.content === 'Ready for your commands!')) {
+      return; // Skip adding these messages once user has interacted
+    }
+    
     if (message.type === 'system' && 
         (message.content === 'Connected to AI Terminal Agent' || 
          message.content === 'Ready for your commands!')) {
@@ -499,6 +508,9 @@ const AITerminal = () => {
   
   const sendCommand = async () => {
     if (!input.trim() || !isConnected || isProcessing) return;
+    
+    // Mark that user has interacted with the terminal
+    setHasUserInteracted(true);
     
     // Add user message to the chat
     addMessage({ type: 'user-input', content: input });
@@ -613,6 +625,8 @@ View in Google Calendar: ${calendarResponse.data.calendarLink}`;
       )
     ));
     
+    // When reconnecting, we should preserve the hasUserInteracted state
+    // so welcome messages don't reappear
     if (socketRef.current) {
       socketRef.current.close();
     }
@@ -654,6 +668,15 @@ View in Google Calendar: ${calendarResponse.data.calendarLink}`;
     }
   }, [messages, thoughts]);
   
+  // Also filter welcome messages from initial rendering
+  const filteredMessages = hasUserInteracted 
+    ? messages.filter(m => !(
+        m.type === 'system' && 
+        (m.content === 'Connected to AI Terminal Agent' || 
+         m.content === 'Ready for your commands!')
+      ))
+    : messages;
+
   const renderMessage = (message) => {
     const { type, content, id, authUrl } = message;
     
@@ -662,6 +685,13 @@ View in Google Calendar: ${calendarResponse.data.calendarLink}`;
     }
     
     if (type === 'command') {
+      return null;
+    }
+    
+    // Hide welcome messages after user has interacted
+    if (hasUserInteracted && 
+        type === 'system' && 
+        (content === 'Connected to AI Terminal Agent' || content === 'Ready for your commands!')) {
       return null;
     }
     
@@ -799,7 +829,7 @@ useEffect(() => {
               </div>
             )}
             
-            {messages.length === 0 && !error && (
+            {filteredMessages.length === 0 && !error && (
               <div className="p-8 text-center text-gray-500 italic">
                 <FiTerminal className="mx-auto text-4xl mb-2" />
                 <p>Type a command or question to begin</p>
@@ -807,7 +837,7 @@ useEffect(() => {
             )}
             
             <div className="space-y-1 py-2 mb-4">
-              {messages.map(renderMessage)}
+              {filteredMessages.map(renderMessage)}
             </div>
           </div>
           
@@ -902,12 +932,10 @@ useEffect(() => {
               <span className="text-sm">Schedule</span>
             </button>
             <div className="flex-1"></div>
-            <button className="flex items-center justify-center w-8 h-8 rounded-full border border-white/70 text-white/70 hover:text-white hover:border-white mr-2">
-              <div className="w-5 h-5 flex items-center justify-center rounded-full border border-white/70">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </div>
+            <button className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-800 text-white/70 hover:text-white hover:bg-gray-700 mr-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
             </button>
             <button
               onClick={handleSend}
@@ -915,7 +943,7 @@ useEffect(() => {
               className={`flex items-center justify-center w-8 h-8 rounded-full ${
                 !input.trim() || !isConnected || isProcessing
                   ? "bg-gray-600 cursor-not-allowed"
-                  : "bg-white hover:bg-gray-200"
+                  : "bg-white hover:bg-white/90"
               }`}
             >
               {isProcessing ? (
