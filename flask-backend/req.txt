@@ -1,0 +1,6 @@
+autogen
+Flask
+Flask-SocketIO
+mem0ai
+openai
+python-dotenv
