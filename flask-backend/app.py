@@ -18,6 +18,30 @@ WATCHED_FILE = os.path.abspath(
                  "../scripts/logs\categorized_log.json")
 )
 
+
+class FileChangeHandler(FileSystemEventHandler):
+    def __init__(self, socketio_instance):
+        self.socketio = socketio_instance
+
+
+    def on_modified(self, event):
+        src = os.path.abspath(event.src_path)
+        # print(f"src_path -> {src}")
+        # print(f"watched file -> {WATCHED_FILE}")
+        if src == WATCHED_FILE:
+            print(f"File {event.src_path} has been modified!")
+            self.emit_file_on_change_event()
+    
+
+    def emit_file_on_change_event(self):
+        # print("Emitting....")
+        with open("../scripts/logs/categorized_log.json", 'r') as file:
+            data = file.read()
+            socketio.emit('file_change', {'content': data})
+        # emit('new_change', {'status': 'File changed and updated'})
+
+
+
 @socketio.on('start_conversation')
 def handle_start_conversation(data):
     user_id = data['user_id']
