@@ -10,6 +10,7 @@ const calendarRoutes = require('./routes/calendarRoutes');
 const aiRoutes = require('./routes/aiRoutes'); // Import AI routes
 const commandRoutes = require('./routes/commandRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
+const gmailRoutes = require('./routes/gmailRoutes'); // Import Gmail routes
 
 // Create the express app
 const app = express();
@@ -31,6 +32,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/command', commandRoutes);
 app.use('/api/screenshot', screenshotRoutes);
 app.use('/api/ai', aiRoutes); // Register AI routes
+app.use('/api/gmail', gmailRoutes); // Register Gmail routes
 
 // Test route specifically for AI routes
 app.get('/api/ai-test', (req, res) => {
