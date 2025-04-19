@@ -2,10 +2,9 @@ import React from 'react';
 import { FaChrome, FaFirefox, FaWindows, FaCode, FaRegWindowMaximize } from 'react-icons/fa';
 
 const ActivityLog = ({ data }) => {
-  // Get the most recent 5 activities
-  const recentActivities = [...data]
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, 5);
+  // Sort activities by timestamp (most recent first) but don't limit to 5
+  const sortedActivities = [...data]
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   
   const getAppIcon = (appName) => {
     const lcApp = appName.toLowerCase();
@@ -34,32 +33,44 @@ const ActivityLog = ({ data }) => {
   };
   
   return (
-    <div className="space-y-3">
-      {recentActivities.map((activity, index) => (
-        <div 
-          key={index} 
-          className="flex items-center p-3 bg-gray-700/30 rounded-lg transition-all hover:bg-gray-700/50"
-        >
-          <div className="mr-3 p-2 bg-gray-700/50 rounded text-xl">
-            {getAppIcon(activity.app_name)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">{activity.app_name}</div>
-            <div className="text-xs text-gray-400 truncate" title={activity.window_title}>
+    <div className="bg-[#121212] text-gray-300 relative rounded-lg overflow-hidden"
+    style={{
+      border: '0.5px solid #4B5563',
+    }}>
+      <div className="text-gray-300 text-sm font-medium pb-2 px-4 pt-3 bg-[#1C1B23] rounded-t-lg">ACTIVITY</div>
+      <div className="flex items-center mb-4 px-4 pt-4">
+        <div className="text-gray-500 mr-4">Desktop application:</div>
+        <div className="text-gray-400">Ok</div>
+      </div>
+      
+      <div className="space-y-2 px-4 max-h-[300px] overflow-hidden relative pb-4" 
+           style={{
+             maskImage: 'linear-gradient(to bottom, #121212 40%, transparent 100%)',
+             WebkitMaskImage: 'linear-gradient(to bottom, #121212 40%, transparent 100%)'
+           }}>
+        {sortedActivities.map((activity, index) => (
+          <div 
+            key={index} 
+            className="grid grid-cols-[100px_150px_1fr] items-center"
+          >
+            <div className="text-gray-500">
+              {formatTime(activity.timestamp)}
+            </div>
+            <div className="text-gray-300">
+              {activity.app_name}
+            </div>
+            <div className="text-gray-500 whitespace-nowrap overflow-hidden text-overflow-ellipsis" title={activity.window_title}>
               {truncateTitle(activity.window_title)}
             </div>
           </div>
-          <div className="text-xs text-gray-400 whitespace-nowrap">
-            {formatTime(activity.timestamp)}
+        ))}
+        
+        {sortedActivities.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No recent activity data available
           </div>
-        </div>
-      ))}
-      
-      {recentActivities.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          No recent activity data available
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

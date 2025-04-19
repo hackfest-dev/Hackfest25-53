@@ -5,6 +5,7 @@ import TimelineBreakdown from '../../components/dashboard/TimelineBreakdown';
 import TotalTimeSpent from '../../components/dashboard/TotalTimeSpent';
 import ActivityLog from '../../components/dashboard/ActivityLog';
 import CategoryBreakdown from '../../components/dashboard/CategoryBreakdown';
+import UpcomingEvents from '../../components/dashboard/UpcomingEvents';
 import api from '../../services/api';
 
 // Create a context to hold the activity data without causing re-renders
@@ -37,10 +38,10 @@ const StatusDisplay = React.memo(({ lastUpdated, isRefreshing, onRefresh, nextRe
     <button 
       onClick={onRefresh}
       disabled={isRefreshing}
-      className={`px-3 py-1 rounded text-xs ${
+      className={`px-3 py-1 rounded-full text-xs cursor-pointer ${
         isRefreshing 
           ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
-          : 'bg-indigo-700 text-white hover:bg-indigo-600'
+          : 'bg-gray-700 text-white hover:bg-gray-600'
       }`}
     >
       Refresh Now
@@ -138,11 +139,25 @@ const ActivityDataProvider = ({ children }) => {
       setIsRefreshing(true);
       console.log('Fetching activity data...');
       
-      // Hard cache-busting to prevent browser caching
+      // Create a trigger file for the backend to refresh the data immediately
+      try {
+        await fetch('/refresh_trigger.txt', { 
+          method: 'POST', 
+          body: Date.now().toString(),
+          headers: { 'Content-Type': 'text/plain' }
+        });
+        console.log('Refresh trigger sent to backend');
+      } catch (err) {
+        console.warn('Failed to send refresh trigger to backend:', err);
+      }
+      
+      // Wait a moment for the backend to process the data
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Now fetch the latest data with cache-busting
       const timestamp = Date.now();
       const url = `/categorized_log.json?nocache=${timestamp}`;
       
-      // Use cache: 'no-store' to force network request
       const response = await fetch(url, {
         cache: 'no-store',
         headers: {
@@ -345,14 +360,18 @@ const DashboardContent = React.memo(() => {
               </div>
             </div>
             
-            <div className="flex flex-col md:flex-row gap-6 mt-6">
-              <div className="w-full md:w-1/2 bg-gray-800 rounded-lg shadow-lg p-4">
-                <h2 className="text-xl font-semibold text-indigo-400 mb-4">Recent Activity</h2>
+            <div className="flex flex-row gap-6 mt-6">
+              <div className="w-1/2 bg-[#121212] rounded-lg shadow-lg ">
                 <ActivityLogWrapper />
               </div>
-              <div className="w-full md:w-1/2 bg-gray-800 rounded-lg shadow-lg p-4">
-                <h2 className="text-xl font-semibold text-indigo-400 mb-4">Category Breakdown</h2>
+              <div className="w-1/2 bg-[#121212] rounded-lg shadow-lg">
                 <CategoryBreakdownWrapper />
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <div className="bg-[#121212] rounded-lg shadow-lg h-[350px]">
+                <UpcomingEvents />
               </div>
             </div>
           </div>
