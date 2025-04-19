@@ -11,7 +11,8 @@ const botRoutes = require('./routes/botRoutes');
 const screenshotRoutes = require('./routes/screenshotRoutes');
 const commandRoutes = require('./routes/commandRoutes');
 const calendarRoutes = require('./routes/calendarRoutes');
-const authRoutes = require('./routes/authRoutes'); // New auth routes
+const authRoutes = require('./routes/authRoutes'); 
+const aiRoutes = require('./routes/aiRoutes'); // Add AI routes import
 
 // Authentication middleware
 const authController = require('./controllers/authController');
@@ -64,6 +65,7 @@ app.use('/api/bot', authController.verifyToken, botRoutes); // Protected by auth
 app.use('/api/screenshot', authController.verifyToken, screenshotRoutes); // Protected by auth
 app.use('/api/command', authController.verifyToken, commandRoutes); // Protected by auth
 app.use('/api/calendar', calendarRoutes); // Calendar has its own auth handling
+app.use('/api/ai', aiRoutes); // Add AI routes registration
 
 // Debug: Log registered routes
 app._router.stack.forEach((middleware) => {
