@@ -21,6 +21,9 @@ const googleProvider = new GoogleAuthProvider();
 // Add calendar-related scopes for Google Auth
 googleProvider.addScope('https://www.googleapis.com/auth/calendar');
 googleProvider.addScope('https://www.googleapis.com/auth/calendar.events');
+// Add Gmail API scopes
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.labels');
 // Force selection of account on each login to avoid scope issues
 googleProvider.setCustomParameters({
   prompt: 'select_account'

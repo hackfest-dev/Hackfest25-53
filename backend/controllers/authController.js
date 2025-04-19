@@ -2,6 +2,7 @@ const { createLogger } = require('../utils/logger');
 const admin = require('firebase-admin');
 const { OAuth2Client } = require('google-auth-library');
 const calendarManager = require('../services/calendarManager');
+const gmailService = require('../services/gmailService'); // Add this import
 
 const logger = createLogger('auth-controller');
 
@@ -36,6 +37,15 @@ const verifyToken = async (req, res, next) => {
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
     req.user = decodedToken;
+    
+    // Check if the user signed in with Google
+    // The provider ID for Google is 'google.com'
+    if (decodedToken.firebase && 
+        decodedToken.firebase.sign_in_provider === 'google.com') {
+      // The user is authenticated with Google, so mark that in the request
+      req.isGoogleAuth = true;
+    }
+    
     next();
   } catch (error) {
     logger.error('Token verification failed:', error);
@@ -50,7 +60,7 @@ const verifyToken = async (req, res, next) => {
 // Handle Google authentication and calendar setup
 const handleGoogleAuth = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { token, googleAccessToken } = req.body;
     
     if (!token) {
       return res.status(400).json({
@@ -69,13 +79,19 @@ const handleGoogleAuth = async (req, res) => {
     
     // Get tokens from payload
     const googleToken = {
-      access_token: token,
+      access_token: googleAccessToken || token,
       id_token: token
     };
     
-    // Set up Calendar credentials
     try {
+      // Set up Calendar credentials
       await calendarManager.setGoogleTokens(googleToken, payload);
+      
+      // Also set up Gmail credentials if googleAccessToken is provided
+      if (googleAccessToken) {
+        await gmailService.setGmailTokens(googleToken, payload);
+        logger.info(`Gmail tokens set for user ${payload.sub}`);
+      }
       
       return res.status(200).json({
         success: true,
@@ -83,15 +99,16 @@ const handleGoogleAuth = async (req, res) => {
         user: {
           uid: payload.sub,
           email: payload.email,
-          name: payload.name
+          name: payload.name,
+          googleAuth: !!googleAccessToken // Indicate if Google services are authorized
         }
       });
-    } catch (calendarError) {
-      logger.error('Calendar setup error:', calendarError);
+    } catch (setupError) {
+      logger.error('Google services setup error:', setupError);
       return res.status(500).json({
         success: false,
-        message: 'Authentication successful but calendar setup failed',
-        error: calendarError.message
+        message: 'Authentication successful but Google services setup failed',
+        error: setupError.message
       });
     }
   } catch (error) {

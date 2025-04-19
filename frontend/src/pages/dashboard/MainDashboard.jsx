@@ -7,6 +7,7 @@ import ActivityLog from '../../components/dashboard/ActivityLog';
 import CategoryBreakdown from '../../components/dashboard/CategoryBreakdown';
 import UpcomingEvents from '../../components/dashboard/UpcomingEvents';
 import DailyTip from '../../components/dashboard/DailyTip';
+import GmailOverview from '../../components/dashboard/GmailOverview';
 import api from '../../services/api';
 
 // Create a context to hold the activity data without causing re-renders
@@ -367,14 +368,17 @@ const DashboardContent = React.memo(() => {
             </div>
             
             <div className="flex flex-row gap-6 mt-6">
-              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <ActivityLogWrapper />
               </div>
-              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <CategoryBreakdownWrapper />
               </div>
-              <div className="w-1/3 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
                 <UpcomingEvents />
+              </div>
+              <div className="w-1/4 bg-[#121212] rounded-lg shadow-lg h-[350px]">
+                <GmailOverview />
               </div>
             </div>
           </div>

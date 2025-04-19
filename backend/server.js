@@ -13,6 +13,7 @@ const commandRoutes = require('./routes/commandRoutes');
 const calendarRoutes = require('./routes/calendarRoutes');
 const authRoutes = require('./routes/authRoutes'); 
 const aiRoutes = require('./routes/aiRoutes'); // Add AI routes import
+const gmailRoutes = require('./routes/gmailRoutes'); // Add Gmail routes import
 
 // Authentication middleware
 const authController = require('./controllers/authController');
@@ -88,6 +89,7 @@ app.use('/api/bot', authController.verifyToken, botRoutes); // Protected by auth
 app.use('/api/screenshot', authController.verifyToken, screenshotRoutes); // Protected by auth
 app.use('/api/command', authController.verifyToken, commandRoutes); // Protected by auth
 app.use('/api/calendar', calendarRoutes); // Calendar has its own auth handling
+app.use('/api/gmail', gmailRoutes); // Gmail routes
 
 // Make this line more visible for debugging
 logger.info('🔹 Registering AI routes at /api/ai');
