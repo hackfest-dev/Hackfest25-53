@@ -344,7 +344,7 @@ const DashboardContent = React.memo(() => {
           <div className="space-y-6">
             {/* Daily Tip component */}
             <div className="mt-4">
-              <DailyTip />
+              {/* <DailyTip /> */}
             </div>
             
             {/* First row: TimeTrackingCard and CategoryBreakdown */}
