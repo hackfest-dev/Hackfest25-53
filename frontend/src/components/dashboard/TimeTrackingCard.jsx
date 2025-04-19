@@ -19,16 +19,16 @@ const CurrentTimeIndicator = React.memo(({ hour, currentHour, currentMinute }) =
 // Create a circular progress component for category visualization
 const CategoryProgressCircle = React.memo(({ percentage, color }) => {
   // Calculate the stroke-dasharray and stroke-dashoffset for the circle
-  const radius = 12;
+  const radius = 16; // Increased from 12
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (percentage / 100) * circumference;
   
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" className="mr-2">
+    <svg width="64" height="" viewBox="0 0 40 40" className="mr-2"> {/* Increased from 32x32 */}
       {/* Background circle */}
       <circle 
-        cx="16" 
-        cy="16" 
+        cx="20" 
+        cy="20" 
         r={radius} 
         stroke="#2A2A2A" 
         strokeWidth="4" 
@@ -36,8 +36,8 @@ const CategoryProgressCircle = React.memo(({ percentage, color }) => {
       />
       {/* Foreground circle showing percentage */}
       <circle 
-        cx="16" 
-        cy="16" 
+        cx="20" 
+        cy="20" 
         r={radius} 
         stroke={color} 
         strokeWidth="4" 
@@ -45,7 +45,7 @@ const CategoryProgressCircle = React.memo(({ percentage, color }) => {
         strokeLinecap="round" 
         strokeDasharray={circumference}
         strokeDashoffset={dashOffset}
-        transform="rotate(-90 16 16)"
+        transform="rotate(-90 20 20)"
       />
     </svg>
   );
@@ -215,16 +215,16 @@ const TimeTrackingCard = ({ data, isTracking, onToggleTracking }) => {
       <div className="text-gray-300 text-sm font-medium pb-2 px-4 pt-3 bg-[#1C1B23]">WORK HOURS</div>
       
       {/* Total time display */}
-      <div className="flex flex-col items-center justify-center px-4 py-2 bg-[#121212] border-b border-gray-800">
+      {/* <div className="flex flex-col items-center justify-center px-4 py-2 bg-[#121212] border-b border-gray-800">
         <div className="text-sm text-gray-400 mb-1">Total time worked</div>
         <div className="text-3xl font-bold mb-1">{stats.hours}h {stats.minutes}m</div>
-      </div>
+      </div> */}
       
       {/* Top 5 Categories by Time Spent - Horizontal Layout */}
       <div className="bg-[#121212] px-4 py-2 border-b border-gray-800">
-        <div className="text-xs text-gray-400 mb-2">TOP CATEGORIES BY TIME</div>
+        {/* <div className="text-xs text-gray-400 mb-2">TOP CATEGORIES BY TIME</div> */}
         
-        <div className="flex w-full justify-between">
+        <div className="flex w-full justify-between mb-10 mt-10">
           {topCategories.length > 0 ? (
             topCategories.map((category, index) => (
               <div key={index} className="flex flex-row items-center">

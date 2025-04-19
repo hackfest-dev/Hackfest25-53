@@ -115,7 +115,10 @@ const UpcomingEvents = () => {
   `;
 
   return (
-    <div className="bg-[#121212] text-gray-300 relative rounded-lg overflow-hidden h-full flex flex-col">
+    <div className="bg-[#121212] text-gray-300 relative rounded-lg overflow-hidden h-full flex flex-col"
+    style={{
+      border: '0.5px solid #4B5563',
+    }}>
       <style>{scrollbarStyles}</style>
       
       {/* Header */}
